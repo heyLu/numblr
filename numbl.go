@@ -84,10 +84,11 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 		modeCSS = `body { color: #bbb; background-color: #333; }`
 	}
 	fmt.Fprintf(w, `<!doctype html>
-<html>
+<html lang="en">
 <head>
 	<meta charset="utf-8" />
 	<meta name="viewport" content="width=device-width,minimum-scale=1,initial-scale=1" />
+	<meta name="description" content="Mirror of %s tumblrs" />
 	<title>%s</title>
 	<style>h1 { word-break: break-all; }blockquote, figure { margin-left: 0; }body { font-family: sans-serif; }article{ border-bottom: 1px solid black; padding: 1em 0; }.tags { list-style: none; padding: 0; font-size: smaller; color: #666; }.tags > li { display: inline }img, video { max-width: 95vw; }@media (min-width: 60em) { body { margin-left: 15vw; } article { max-width: 60em; } img, video { max-height: 20vh; } img:hover, video:hover { max-height: 100%%; }}%s</style>
 	<link rel="preconnect" href="https://64.media.tumblr.com/" />
@@ -97,9 +98,9 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 
 <h1>%s</h1>
 
-`, tumbl, modeCSS, tumbl)
+`, tumbl, tumbl, modeCSS, tumbl)
 
-	fmt.Fprintf(w, `<form method="GET" action=%q><input name="search" value=%q placeholder="noreblog #art ..." /></form>`, req.URL.Path, search)
+	fmt.Fprintf(w, `<form method="GET" action=%q><input aria-label="search posts" name="search" type="search" value=%q placeholder="noreblog #art ..." /></form>`, req.URL.Path, search)
 
 	multiple := false
 	var tumblr Tumblr
