@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/xml"
 	"errors"
+	"flag"
 	"fmt"
 	"html"
 	"io"
@@ -36,7 +37,14 @@ func (p Post) IsReblog() bool {
 var imgRE = regexp.MustCompile(`<img `)
 var linkRE = regexp.MustCompile(`<a `)
 
+var config struct {
+	DefaultTumblr string
+}
+
 func main() {
+	flag.StringVar(&config.DefaultTumblr, "default", "nettleforest", "Default tumblr to view")
+	flag.Parse()
+
 	router := mux.NewRouter()
 	router.Use(gziphandler.GzipHandler)
 
@@ -53,10 +61,7 @@ Disallow: /`)
 	router.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
 		start := time.Now()
 
-		tumbl := req.URL.Path[1:]
-		if tumbl == "" {
-			tumbl = "nettleforest"
-		}
+		tumbl := tumblsFromRequest(req)
 
 		search := req.URL.Query().Get("search")
 
@@ -76,9 +81,13 @@ Disallow: /`)
 	<link rel="preconnect" href="https://64.media.tumblr.com/" />
 </head>
 
-<body>`, tumbl, modeCSS)
+<body>
 
-		fmt.Fprintf(w, `<form method="GET" action=%q><input name="search" value=%q /></form>`, req.URL.Path, search)
+<h1>%s</h1>
+
+`, tumbl, modeCSS, tumbl)
+
+		fmt.Fprintf(w, `<form method="GET" action=%q><input name="search" value=%q placeholder="noreblog #art ..." /></form>`, req.URL.Path, search)
 
 		multiple := false
 		var tumblr Tumblr
@@ -169,6 +178,28 @@ Disallow: /`)
 	addr := "localhost:5555"
 	log.Printf("Listening on http://%s", addr)
 	log.Fatal(http.ListenAndServe(addr, nil))
+}
+
+func tumblsFromRequest(req *http.Request) string {
+	// explicitely specified
+	tumbl := req.URL.Path[1:]
+	if tumbl != "" {
+		return tumbl
+	}
+
+	cookie, err := req.Cookie("numbl")
+	if err != nil {
+		if err != http.ErrNoCookie {
+			log.Printf("getting cookie: %s", err)
+		}
+		return config.DefaultTumblr
+	}
+
+	if cookie.Value != "" {
+		return cookie.Value
+	}
+
+	return config.DefaultTumblr
 }
 
 func MergeTumblrs(tumblrs ...Tumblr) Tumblr {
