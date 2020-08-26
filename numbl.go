@@ -35,12 +35,18 @@ func (p Post) IsReblog() bool {
 func main() {
 	router := mux.NewRouter()
 	router.Use(gziphandler.GzipHandler)
-	router.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
-		if req.URL.Path == "/favicon.ico" {
-			http.Error(w, "not found", http.StatusNotFound)
-			return
-		}
 
+	router.HandleFunc("/favicon.ico", func(w http.ResponseWriter, req *http.Request) {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	})
+
+	router.HandleFunc("/robots.txt", func(w http.ResponseWriter, req *http.Request) {
+		fmt.Fprintln(w, `User-agent: *
+Disallow: /`)
+	})
+
+	router.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
 		tumbl := req.URL.Path[1:]
 		if tumbl == "" {
 			tumbl = "nettleforest"
