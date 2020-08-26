@@ -39,6 +39,8 @@ var linkRE = regexp.MustCompile(`<a `)
 var videoRE = regexp.MustCompile(`<video `)
 var autoplayRE = regexp.MustCompile(` autoplay="autoplay"`)
 
+const CookieName = "numbl"
+
 var config struct {
 	DefaultTumblr string
 }
@@ -60,8 +62,52 @@ func main() {
 Disallow: /`)
 	})
 
-	router.HandleFunc("/", HandleTumblr)
+	router.HandleFunc("/settings", func(w http.ResponseWriter, req *http.Request) {
+		tumblrs := req.FormValue("tumblrs")
+
+		first := true
+		cookieValue := ""
+		for _, tumblr := range strings.Split(tumblrs, "\n") {
+			tumblr = strings.TrimSpace(tumblr)
+			if tumblr == "" {
+				continue
+			}
+			if !first {
+				cookieValue += ","
+			}
+			first = false
+			cookieValue += tumblr
+		}
+
+		if cookieValue == "" {
+			http.Redirect(w, req, "/", http.StatusTemporaryRedirect)
+			return
+		}
+
+		http.SetCookie(w, &http.Cookie{
+			Name:     CookieName,
+			Value:    cookieValue,
+			SameSite: http.SameSiteStrictMode,
+			HttpOnly: true,
+		})
+		http.Redirect(w, req, "/", http.StatusSeeOther)
+	}).Methods("POST")
+
+	router.HandleFunc("/settings/clear", func(w http.ResponseWriter, req *http.Request) {
+		cookie, err := req.Cookie(CookieName)
+		if err != nil {
+			http.Redirect(w, req, "/", http.StatusTemporaryRedirect)
+			return
+		}
+
+		cookie.Value = ""
+		cookie.MaxAge = -1
+		http.SetCookie(w, cookie)
+		http.Redirect(w, req, "/", http.StatusSeeOther)
+	}).Methods("POST")
+
 	router.HandleFunc("/{tumblrs}", HandleTumblr)
+	router.HandleFunc("/", HandleTumblr)
 
 	http.Handle("/", router)
 
@@ -123,7 +169,7 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 		tumblr, err = NewTumblrRSS(tumbl)
 	}
 	if err != nil {
-		log.Println("open: ", err)
+		log.Println("open:", err)
 		if tumblr == nil {
 			fmt.Fprintf(w, `<code style="color: red; font-weight: bold; font-size: larger;">could not load tumblr: %s</code>`, err)
 			return
@@ -190,9 +236,25 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 
 		nextPost()
 	}
-	fmt.Fprintf(w, `<footer>%d posts from %q (<a href=%q>source</a>) in %s (open: %s)</footer>`, postCount, tumblr.Name(), tumblr.URL(), time.Since(start).Round(time.Millisecond), openTime.Round(time.Millisecond))
+
+	tumbls := strings.Split(tumbl, ",")
+	fmt.Fprintf(w, `<form method="POST" action="/settings">
+	<label for="tumblrs">Tumblrs to view by default</label>:
+
+	<div class="field">
+		<textarea rows="%d" cols="30" name="tumblrs">%s</textarea>
+	</div>
+	<input type="submit" value="Save" />
+</form>
+
+<form method="POST" action="/settings/clear">
+	<input type="submit" value="Clear" title="FIXME: clear currently broken :/" disabled />
+</form>
+`, len(tumbls)+1, strings.Join(tumbls, "\n"))
+
+	fmt.Fprintf(w, `<hr /><footer>%d posts from %q (<a href=%q>source</a>) in %s (open: %s)</footer>`, postCount, tumblr.Name(), tumblr.URL(), time.Since(start).Round(time.Millisecond), openTime.Round(time.Millisecond))
 	if err != nil && !errors.Is(err, io.EOF) {
-		log.Println("decode: ", err)
+		log.Println("decode:", err)
 	}
 
 	fmt.Fprintln(w, `<script>
@@ -221,7 +283,7 @@ func tumblsFromRequest(req *http.Request) string {
 		return tumbl
 	}
 
-	cookie, err := req.Cookie("numbl")
+	cookie, err := req.Cookie(CookieName)
 	if err != nil {
 		if err != http.ErrNoCookie {
 			log.Printf("getting cookie: %s", err)
