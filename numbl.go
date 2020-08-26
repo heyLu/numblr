@@ -36,6 +36,8 @@ func (p Post) IsReblog() bool {
 
 var imgRE = regexp.MustCompile(`<img `)
 var linkRE = regexp.MustCompile(`<a `)
+var videoRE = regexp.MustCompile(`<video `)
+var autoplayRE = regexp.MustCompile(` autoplay="autoplay"`)
 
 var config struct {
 	DefaultTumblr string
@@ -163,6 +165,12 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 		})
 		postHTML = linkRE.ReplaceAllStringFunc(postHTML, func(repl string) string {
 			return `<a rel="noreferrer" `
+		})
+		postHTML = videoRE.ReplaceAllStringFunc(postHTML, func(repl string) string {
+			return `<video preload="metadata" `
+		})
+		postHTML = autoplayRE.ReplaceAllStringFunc(postHTML, func(repl string) string {
+			return ``
 		})
 
 		fmt.Fprint(w, postHTML)
