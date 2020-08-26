@@ -194,6 +194,24 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 	if err != nil && !errors.Is(err, io.EOF) {
 		log.Println("decode: ", err)
 	}
+
+	fmt.Fprintln(w, `<script>
+  let startY;
+
+  window.addEventListener('touchstart', e => {
+    startY = e.touches[0].pageY;
+  }, {passive: true});
+
+  window.addEventListener('touchmove', e => {
+    const y = e.touches[0].pageY;
+    if (document.scrollingElement.scrollTop === 0 && y > startY) {
+      window.location.reload();
+    }
+  }, {passive: true});
+</script>`)
+
+	fmt.Fprintln(w, `</body>
+</html>`)
 }
 
 func tumblsFromRequest(req *http.Request) string {
