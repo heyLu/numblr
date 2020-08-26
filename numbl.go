@@ -120,7 +120,11 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 		tumblr, err = NewTumblrRSS(tumbl)
 	}
 	if err != nil {
-		log.Fatal("open:", err)
+		log.Println("open: ", err)
+		if tumblr == nil {
+			fmt.Fprintf(w, `<code style="color: red; font-weight: bold; font-size: larger;">could not load tumblr: %s</code>`, err)
+			return
+		}
 	}
 	defer tumblr.Close()
 	openTime := time.Since(start)
@@ -179,7 +183,7 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 	}
 	fmt.Fprintf(w, `<footer>%d posts from %q (<a href=%q>source</a>) in %s (open: %s)</footer>`, postCount, tumblr.Name(), tumblr.URL(), time.Since(start).Round(time.Millisecond), openTime.Round(time.Millisecond))
 	if err != nil && !errors.Is(err, io.EOF) {
-		log.Fatal("decode:", err)
+		log.Println("decode: ", err)
 	}
 }
 
@@ -290,7 +294,7 @@ func NewTumblrRSS(name string) (Tumblr, error) {
 	rssURL := fmt.Sprintf("https://%s.tumblr.com/rss", name)
 	resp, err := http.Get(rssURL)
 	if err != nil {
-		return nil, fmt.Errorf("download: %w", err)
+		return nil, fmt.Errorf("download %q: %w", name, err)
 	}
 	if resp.StatusCode != 200 {
 		return nil, fmt.Errorf("download: wrong response code: %d", resp.StatusCode)
