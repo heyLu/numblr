@@ -34,6 +34,7 @@ func (p Post) IsReblog() bool {
 }
 
 var imgRE = regexp.MustCompile(`<img `)
+var linkRE = regexp.MustCompile(`<a `)
 
 func main() {
 	router := mux.NewRouter()
@@ -135,6 +136,9 @@ Disallow: /`)
 					return `<img loading="lazy" `
 				}
 				return `<img `
+			})
+			postHTML = linkRE.ReplaceAllStringFunc(postHTML, func(repl string) string {
+				return `<a rel="noreferrer" `
 			})
 
 			fmt.Fprint(w, postHTML)
