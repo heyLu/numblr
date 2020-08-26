@@ -51,6 +51,8 @@ Disallow: /`)
 	})
 
 	router.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
+		start := time.Now()
+
 		tumbl := req.URL.Path[1:]
 		if tumbl == "" {
 			tumbl = "nettleforest"
@@ -58,7 +60,26 @@ Disallow: /`)
 
 		search := req.URL.Query().Get("search")
 
-		start := time.Now()
+		w.Header().Set("Content-Type", "text/html")
+
+		modeCSS := ""
+		if _, ok := req.URL.Query()["night-mode"]; ok {
+			modeCSS = `body { color: #bbb; background-color: #333; }`
+		}
+		fmt.Fprintf(w, `<!doctype html>
+<html>
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width,minimum-scale=1,initial-scale=1" />
+	<title>%s</title>
+	<style>blockquote { margin-left: 0; }body { font-family: sans-serif; }article{ border-bottom: 1px solid black; padding: 1em 0; }.tags { list-style: none; padding: 0; font-size: smaller; color: #666; }.tags > li { display: inline }img { max-width: 95vw; }@media (min-width: 60em) { body { margin-left: 15vw; } article { max-width: 60em; } img { max-height: 20vh; } img:hover { max-height: 100%%; }}%s</style>
+	<link rel="preconnect" href="https://64.media.tumblr.com/" />
+</head>
+
+<body>`, tumbl, modeCSS)
+
+		fmt.Fprintf(w, `<form method="GET" action=%q><input name="search" value=%q /></form>`, req.URL.Path, search)
+
 		multiple := false
 		var tumblr Tumblr
 		var err error
@@ -84,26 +105,6 @@ Disallow: /`)
 		}
 		defer tumblr.Close()
 		openTime := time.Since(start)
-
-		w.Header().Set("Content-Type", "text/html")
-
-		modeCSS := ""
-		if _, ok := req.URL.Query()["night-mode"]; ok {
-			modeCSS = `body { color: #bbb; background-color: #333; }`
-		}
-		fmt.Fprintf(w, `<!doctype html>
-<html>
-<head>
-	<meta charset="utf-8" />
-	<meta name="viewport" content="width=device-width,minimum-scale=1,initial-scale=1" />
-	<title>%s</title>
-	<style>blockquote { margin-left: 0; }body { font-family: sans-serif; }article{ border-bottom: 1px solid black; padding: 1em 0; }.tags { list-style: none; padding: 0; font-size: smaller; color: #666; }.tags > li { display: inline }img { max-width: 95vw; }@media (min-width: 60em) { body { margin-left: 15vw; } article { max-width: 60em; } img { max-height: 20vh; } img:hover { max-height: 100%%; }}%s</style>
-	<link rel="preconnect" href="https://64.media.tumblr.com/" />
-</head>
-
-<body>`, tumbl, modeCSS)
-
-		fmt.Fprintf(w, `<form method="GET" action=%q><input name="search" value=%q /></form>`, req.URL.Path, search)
 
 		postCount := 0
 		var post *Post
