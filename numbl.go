@@ -73,6 +73,19 @@ func main() {
 Disallow: /`)
 	})
 
+	router.HandleFunc("/manifest.webmanifest", func(w http.ResponseWriter, req *http.Request) {
+		w.Header().Set("Content-Type", "application/manifest+json")
+
+		fmt.Fprintln(w, `{
+  "name": "Numbl",
+  "short_name": "numbl",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#bbb",
+  "description": "A bare-bones mirror for tumblrs.",
+}`)
+	})
+
 	router.HandleFunc("/settings", func(w http.ResponseWriter, req *http.Request) {
 		tumblrs := req.FormValue("tumblrs")
 
@@ -149,6 +162,7 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 	<title>%s</title>
 	<style>h1 { word-break: break-all; }blockquote, figure { margin: 0; }body { font-family: sans-serif; }article{ border-bottom: 1px solid black; padding: 1em 0; }.tags { list-style: none; padding: 0; font-size: smaller; color: #666; }.tags > li { display: inline }img, video { max-width: 95vw; }@media (min-width: 60em) { body { margin-left: 15vw; } article { max-width: 60em; } img, video { max-height: 20vh; } img:hover, video:hover { max-height: 100%%; }}%s</style>
 	<link rel="preconnect" href="https://64.media.tumblr.com/" />
+	<link rel="manifest" href="/manifest.webmanifest" />
 </head>
 
 <body>
