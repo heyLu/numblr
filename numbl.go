@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -31,6 +32,8 @@ type Post struct {
 func (p Post) IsReblog() bool {
 	return strings.Contains(p.DescriptionHTML, `class="tumblr_blog"`)
 }
+
+var imgRE = regexp.MustCompile(`<img `)
 
 func main() {
 	router := mux.NewRouter()
@@ -107,6 +110,7 @@ Disallow: /`)
 			post, err = tumblr.Next()
 		}
 
+		imageCount := 0
 		nextPost()
 		for err == nil {
 			classes := make([]string, 0, 1)
@@ -122,7 +126,19 @@ Disallow: /`)
 			if multiple {
 				fmt.Fprintf(w, "<p>%s:<p>", post.Author)
 			}
-			fmt.Fprint(w, html.UnescapeString(post.DescriptionHTML))
+
+			postHTML := html.UnescapeString(post.DescriptionHTML)
+			// load first 5 images eagerly, and the rest lazily
+			postHTML = imgRE.ReplaceAllStringFunc(postHTML, func(repl string) string {
+				imageCount++
+				if imageCount > 5 {
+					return `<img loading="lazy" `
+				}
+				return `<img `
+			})
+
+			fmt.Fprint(w, postHTML)
+
 			fmt.Fprint(w, "<footer>")
 			if len(post.Tags) > 0 {
 				fmt.Fprint(w, `<ul class="tags">`)
