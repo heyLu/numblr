@@ -58,20 +58,29 @@ func main() {
 Disallow: /`)
 	})
 
-	router.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
-		start := time.Now()
+	router.HandleFunc("/", HandleTumblr)
 
-		tumbl := tumblsFromRequest(req)
+	http.Handle("/", router)
 
-		search := req.URL.Query().Get("search")
+	addr := "localhost:5555"
+	log.Printf("Listening on http://%s", addr)
+	log.Fatal(http.ListenAndServe(addr, nil))
+}
 
-		w.Header().Set("Content-Type", "text/html")
+func HandleTumblr(w http.ResponseWriter, req *http.Request) {
+	start := time.Now()
 
-		modeCSS := ""
-		if _, ok := req.URL.Query()["night-mode"]; ok {
-			modeCSS = `body { color: #bbb; background-color: #333; }`
-		}
-		fmt.Fprintf(w, `<!doctype html>
+	tumbl := tumblsFromRequest(req)
+
+	search := req.URL.Query().Get("search")
+
+	w.Header().Set("Content-Type", "text/html")
+
+	modeCSS := ""
+	if _, ok := req.URL.Query()["night-mode"]; ok {
+		modeCSS = `body { color: #bbb; background-color: #333; }`
+	}
+	fmt.Fprintf(w, `<!doctype html>
 <html>
 <head>
 	<meta charset="utf-8" />
@@ -87,97 +96,90 @@ Disallow: /`)
 
 `, tumbl, modeCSS, tumbl)
 
-		fmt.Fprintf(w, `<form method="GET" action=%q><input name="search" value=%q placeholder="noreblog #art ..." /></form>`, req.URL.Path, search)
+	fmt.Fprintf(w, `<form method="GET" action=%q><input name="search" value=%q placeholder="noreblog #art ..." /></form>`, req.URL.Path, search)
 
-		multiple := false
-		var tumblr Tumblr
-		var err error
-		if strings.Contains(tumbl, ",") {
-			multiple = true
-			tumbls := strings.Split(tumbl, ",")
-			tumblrs := make([]Tumblr, len(tumbls))
-			var wg sync.WaitGroup
-			wg.Add(len(tumbls))
-			for i, tumbl := range tumbls {
-				func() {
-					tumblrs[i], err = NewTumblrRSS(tumbl)
-					wg.Done()
-				}()
+	multiple := false
+	var tumblr Tumblr
+	var err error
+	if strings.Contains(tumbl, ",") {
+		multiple = true
+		tumbls := strings.Split(tumbl, ",")
+		tumblrs := make([]Tumblr, len(tumbls))
+		var wg sync.WaitGroup
+		wg.Add(len(tumbls))
+		for i, tumbl := range tumbls {
+			func() {
+				tumblrs[i], err = NewTumblrRSS(tumbl)
+				wg.Done()
+			}()
+		}
+		wg.Wait()
+		tumblr = MergeTumblrs(tumblrs...)
+	} else {
+		tumblr, err = NewTumblrRSS(tumbl)
+	}
+	if err != nil {
+		log.Fatal("open:", err)
+	}
+	defer tumblr.Close()
+	openTime := time.Since(start)
+
+	postCount := 0
+	var post *Post
+	nextPost := func() {
+		post, err = tumblr.Next()
+	}
+
+	imageCount := 0
+	nextPost()
+	for err == nil {
+		classes := make([]string, 0, 1)
+		if post.IsReblog() {
+			if strings.Contains(search, "no-reblog") {
+				nextPost()
+				continue
 			}
-			wg.Wait()
-			tumblr = MergeTumblrs(tumblrs...)
-		} else {
-			tumblr, err = NewTumblrRSS(tumbl)
+			classes = append(classes, "reblog")
 		}
-		if err != nil {
-			log.Fatal("open:", err)
-		}
-		defer tumblr.Close()
-		openTime := time.Since(start)
-
-		postCount := 0
-		var post *Post
-		nextPost := func() {
-			post, err = tumblr.Next()
+		postCount++
+		fmt.Fprintf(w, `<article class=%q>`, strings.Join(classes, " "))
+		if multiple {
+			fmt.Fprintf(w, "<p>%s:<p>", post.Author)
 		}
 
-		imageCount := 0
+		postHTML := html.UnescapeString(post.DescriptionHTML)
+		// load first 5 images eagerly, and the rest lazily
+		postHTML = imgRE.ReplaceAllStringFunc(postHTML, func(repl string) string {
+			imageCount++
+			if imageCount > 5 {
+				return `<img loading="lazy" `
+			}
+			return `<img `
+		})
+		postHTML = linkRE.ReplaceAllStringFunc(postHTML, func(repl string) string {
+			return `<a rel="noreferrer" `
+		})
+
+		fmt.Fprint(w, postHTML)
+
+		fmt.Fprint(w, "<footer>")
+		if len(post.Tags) > 0 {
+			fmt.Fprint(w, `<ul class="tags">`)
+			for _, tag := range post.Tags {
+				fmt.Fprintf(w, `<li>#%s</li> `, tag)
+			}
+			fmt.Fprintln(w, `</ul>`)
+		}
+		fmt.Fprintf(w, `<time title="%s" datetime="%s">%s ago</time>, <a href=%q>link</a>`, post.Date, post.DateString, time.Since(post.Date).Round(time.Minute), post.URL)
+		fmt.Fprint(w, "</footer>")
+		fmt.Fprintln(w, "</article>")
+
 		nextPost()
-		for err == nil {
-			classes := make([]string, 0, 1)
-			if post.IsReblog() {
-				if strings.Contains(search, "no-reblog") {
-					nextPost()
-					continue
-				}
-				classes = append(classes, "reblog")
-			}
-			postCount++
-			fmt.Fprintf(w, `<article class=%q>`, strings.Join(classes, " "))
-			if multiple {
-				fmt.Fprintf(w, "<p>%s:<p>", post.Author)
-			}
-
-			postHTML := html.UnescapeString(post.DescriptionHTML)
-			// load first 5 images eagerly, and the rest lazily
-			postHTML = imgRE.ReplaceAllStringFunc(postHTML, func(repl string) string {
-				imageCount++
-				if imageCount > 5 {
-					return `<img loading="lazy" `
-				}
-				return `<img `
-			})
-			postHTML = linkRE.ReplaceAllStringFunc(postHTML, func(repl string) string {
-				return `<a rel="noreferrer" `
-			})
-
-			fmt.Fprint(w, postHTML)
-
-			fmt.Fprint(w, "<footer>")
-			if len(post.Tags) > 0 {
-				fmt.Fprint(w, `<ul class="tags">`)
-				for _, tag := range post.Tags {
-					fmt.Fprintf(w, `<li>#%s</li> `, tag)
-				}
-				fmt.Fprintln(w, `</ul>`)
-			}
-			fmt.Fprintf(w, `<time title="%s" datetime="%s">%s ago</time>, <a href=%q>link</a>`, post.Date, post.DateString, time.Since(post.Date).Round(time.Minute), post.URL)
-			fmt.Fprint(w, "</footer>")
-			fmt.Fprintln(w, "</article>")
-
-			nextPost()
-		}
-		fmt.Fprintf(w, `<footer>%d posts from %q (<a href=%q>source</a>) in %s (open: %s)</footer>`, postCount, tumblr.Name(), tumblr.URL(), time.Since(start).Round(time.Millisecond), openTime.Round(time.Millisecond))
-		if err != nil && !errors.Is(err, io.EOF) {
-			log.Fatal("decode:", err)
-		}
-	})
-
-	http.Handle("/", router)
-
-	addr := "localhost:5555"
-	log.Printf("Listening on http://%s", addr)
-	log.Fatal(http.ListenAndServe(addr, nil))
+	}
+	fmt.Fprintf(w, `<footer>%d posts from %q (<a href=%q>source</a>) in %s (open: %s)</footer>`, postCount, tumblr.Name(), tumblr.URL(), time.Since(start).Round(time.Millisecond), openTime.Round(time.Millisecond))
+	if err != nil && !errors.Is(err, io.EOF) {
+		log.Fatal("decode:", err)
+	}
 }
 
 func tumblsFromRequest(req *http.Request) string {
