@@ -241,7 +241,7 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 			}
 			fmt.Fprintln(w, `</ul>`)
 		}
-		fmt.Fprintf(w, `<time title="%s" datetime="%s">%s ago</time>, <a href=%q>link</a>`, post.Date, post.DateString, time.Since(post.Date).Round(time.Minute), post.URL)
+		fmt.Fprintf(w, `<time title="%s" datetime="%s">%s ago</time>, <a href=%q>link</a>`, post.Date, post.DateString, prettyDuration(time.Since(post.Date)), post.URL)
 		fmt.Fprint(w, "</footer>")
 		fmt.Fprintln(w, "</article>")
 
@@ -307,6 +307,31 @@ func tumblsFromRequest(req *http.Request) string {
 	}
 
 	return config.DefaultTumblr
+}
+
+func prettyDuration(dur time.Duration) string {
+	switch {
+	case dur < 24*time.Hour:
+		return dur.Round(time.Minute).String()
+	case dur < 7*24*time.Hour:
+		days := (int(dur.Hours()) / 24)
+		if days == 1 {
+			return "1 day"
+		}
+		return fmt.Sprintf("%d days", days)
+	case dur < 365*24*time.Hour:
+		months := (int(dur.Hours()) / 24 / 30)
+		if months == 1 {
+			return "1 month"
+		}
+		return fmt.Sprintf("%d months", months)
+	default:
+		years := (int(dur.Hours()) / 24 / 365)
+		if years == 1 {
+			return "1 year"
+		}
+		return fmt.Sprintf("%d years", years)
+	}
 }
 
 func MergeTumblrs(tumblrs ...Tumblr) Tumblr {
