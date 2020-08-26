@@ -16,6 +16,7 @@ import (
 
 	"github.com/NYTimes/gziphandler"
 	"github.com/gorilla/mux"
+	"github.com/hashicorp/golang-lru"
 )
 
 const TumblrDate = "Mon, 2 Jan 2006 15:04:05 -0700"
@@ -45,9 +46,19 @@ var config struct {
 	DefaultTumblr string
 }
 
+const CacheTime = 10 * time.Minute
+
+var cache *lru.Cache
+
 func main() {
 	flag.StringVar(&config.DefaultTumblr, "default", "nettleforest", "Default tumblr to view")
 	flag.Parse()
+
+	var err error
+	cache, err = lru.New(100)
+	if err != nil {
+		log.Fatal("setup cache:", err)
+	}
 
 	router := mux.NewRouter()
 	router.Use(gziphandler.GzipHandler)
@@ -159,14 +170,14 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 		wg.Add(len(tumbls))
 		for i := range tumbls {
 			go func(i int) {
-				tumblrs[i], err = NewTumblrRSS(tumbls[i])
+				tumblrs[i], err = NewCachedTumblr(tumbls[i], NewTumblrRSS)
 				wg.Done()
 			}(i)
 		}
 		wg.Wait()
 		tumblr = MergeTumblrs(tumblrs...)
 	} else {
-		tumblr, err = NewTumblrRSS(tumbl)
+		tumblr, err = NewCachedTumblr(tumbl, NewTumblrRSS)
 	}
 	if err != nil {
 		log.Println("open:", err)
@@ -377,6 +388,83 @@ type Tumblr interface {
 	URL() string
 	Next() (*Post, error)
 	Close() error
+}
+
+func NewCachedTumblr(name string, uncachedFn func(name string) (Tumblr, error)) (Tumblr, error) {
+	cached, isCached := cache.Get(name)
+	if isCached && time.Since(cached.(*cachedTumblr).cachedAt) < CacheTime {
+		tumblr := *cached.(*cachedTumblr)
+		return &tumblr, nil
+	}
+	tumblr, err := uncachedFn(name)
+	if err != nil {
+		return nil, err
+	}
+	return &cachingTumblr{
+		uncached: tumblr,
+		cached: &cachedTumblr{
+			cachedAt: time.Now(),
+			name:     name,
+			url:      tumblr.URL(),
+			posts:    make([]*Post, 0, 10),
+		},
+	}, nil
+}
+
+type cachingTumblr struct {
+	uncached Tumblr
+	cached   *cachedTumblr
+}
+
+func (ct *cachingTumblr) Name() string {
+	return ct.uncached.Name()
+}
+
+func (ct *cachingTumblr) URL() string {
+	return ct.uncached.URL()
+}
+
+func (ct *cachingTumblr) Next() (*Post, error) {
+	post, err := ct.uncached.Next()
+	if err != nil {
+		return nil, err
+	}
+	ct.cached.posts = append(ct.cached.posts, post)
+	return post, nil
+}
+
+func (ct *cachingTumblr) Close() error {
+	cache.Add(ct.uncached.Name(), ct.cached)
+	return ct.uncached.Close()
+}
+
+type cachedTumblr struct {
+	cachedAt time.Time
+	name     string
+	url      string
+	posts    []*Post
+}
+
+func (ct *cachedTumblr) Name() string {
+	return ct.name
+}
+
+func (ct *cachedTumblr) URL() string {
+	return ct.url
+}
+
+func (ct *cachedTumblr) Next() (*Post, error) {
+	if len(ct.posts) == 0 {
+		return nil, fmt.Errorf("no more posts: %w", io.EOF)
+	}
+
+	post := ct.posts[0]
+	ct.posts = ct.posts[1:]
+	return post, nil
+}
+
+func (ct *cachedTumblr) Close() error {
+	return nil
 }
 
 func NewTumblrRSS(name string) (Tumblr, error) {
