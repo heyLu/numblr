@@ -11,6 +11,9 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/NYTimes/gziphandler"
+	"github.com/gorilla/mux"
 )
 
 const TumblrDate = "Mon, 2 Jan 2006 15:04:05 -0700"
@@ -30,7 +33,9 @@ func (p Post) IsReblog() bool {
 }
 
 func main() {
-	http.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
+	router := mux.NewRouter()
+	router.Use(gziphandler.GzipHandler)
+	router.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
 		if req.URL.Path == "/favicon.ico" {
 			http.Error(w, "not found", http.StatusNotFound)
 			return
@@ -131,6 +136,8 @@ func main() {
 			log.Fatal("decode:", err)
 		}
 	})
+
+	http.Handle("/", router)
 
 	addr := "localhost:5555"
 	log.Printf("Listening on http://%s", addr)
