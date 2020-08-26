@@ -110,11 +110,11 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 		tumblrs := make([]Tumblr, len(tumbls))
 		var wg sync.WaitGroup
 		wg.Add(len(tumbls))
-		for i, tumbl := range tumbls {
-			func() {
-				tumblrs[i], err = NewTumblrRSS(tumbl)
+		for i := range tumbls {
+			go func(i int) {
+				tumblrs[i], err = NewTumblrRSS(tumbls[i])
 				wg.Done()
-			}()
+			}(i)
 		}
 		wg.Wait()
 		tumblr = MergeTumblrs(tumblrs...)
