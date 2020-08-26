@@ -89,7 +89,7 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 	<meta charset="utf-8" />
 	<meta name="viewport" content="width=device-width,minimum-scale=1,initial-scale=1" />
 	<title>%s</title>
-	<style>blockquote { margin-left: 0; }body { font-family: sans-serif; }article{ border-bottom: 1px solid black; padding: 1em 0; }.tags { list-style: none; padding: 0; font-size: smaller; color: #666; }.tags > li { display: inline }img { max-width: 95vw; }@media (min-width: 60em) { body { margin-left: 15vw; } article { max-width: 60em; } img { max-height: 20vh; } img:hover { max-height: 100%%; }}%s</style>
+	<style>h1 { word-break: break-all; }blockquote, figure { margin-left: 0; }body { font-family: sans-serif; }article{ border-bottom: 1px solid black; padding: 1em 0; }.tags { list-style: none; padding: 0; font-size: smaller; color: #666; }.tags > li { display: inline }img, video { max-width: 95vw; }@media (min-width: 60em) { body { margin-left: 15vw; } article { max-width: 60em; } img, video { max-height: 20vh; } img:hover, video:hover { max-height: 100%%; }}%s</style>
 	<link rel="preconnect" href="https://64.media.tumblr.com/" />
 </head>
 
