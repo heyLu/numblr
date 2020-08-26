@@ -98,7 +98,7 @@ Disallow: /`)
 		http.SetCookie(w, &http.Cookie{
 			Name:     CookieName,
 			Value:    cookieValue,
-			SameSite: http.SameSiteStrictMode,
+			SameSite: http.SameSiteLaxMode,
 			HttpOnly: true,
 		})
 		http.Redirect(w, req, "/", http.StatusSeeOther)
