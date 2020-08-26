@@ -59,6 +59,7 @@ Disallow: /`)
 	})
 
 	router.HandleFunc("/", HandleTumblr)
+	router.HandleFunc("/{tumblrs}", HandleTumblr)
 
 	http.Handle("/", router)
 
