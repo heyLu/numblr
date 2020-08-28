@@ -173,11 +173,9 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 
 	fmt.Fprintf(w, `<form method="GET" action=%q><input aria-label="search posts" name="search" type="search" value=%q placeholder="noreblog #art ..." /></form>`, req.URL.Path, search)
 
-	multiple := false
 	var tumblr Tumblr
 	var err error
 	if strings.Contains(tumbl, ",") {
-		multiple = true
 		tumbls := strings.Split(tumbl, ",")
 		tumblrs := make([]Tumblr, len(tumbls))
 		var wg sync.WaitGroup
@@ -222,9 +220,7 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 		}
 		postCount++
 		fmt.Fprintf(w, `<article class=%q>`, strings.Join(classes, " "))
-		if multiple {
-			fmt.Fprintf(w, "<p>%s:<p>", post.Author)
-		}
+		fmt.Fprintf(w, "<p>%s:<p>", post.Author)
 
 		postHTML := html.UnescapeString(post.DescriptionHTML)
 		// load first 5 images eagerly, and the rest lazily
