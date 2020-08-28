@@ -235,7 +235,7 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 			return `<a rel="noreferrer" `
 		})
 		postHTML = videoRE.ReplaceAllStringFunc(postHTML, func(repl string) string {
-			return `<video preload="metadata" `
+			return `<video preload="metadata" controls="" `
 		})
 		postHTML = autoplayRE.ReplaceAllStringFunc(postHTML, func(repl string) string {
 			return ``
