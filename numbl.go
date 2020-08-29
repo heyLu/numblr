@@ -185,14 +185,24 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 		wg.Add(len(tumbls))
 		for i := range tumbls {
 			go func(i int) {
-				tumblrs[i], err = NewCachedTumblr(tumbls[i], NewTumblrRSS)
+				if strings.HasSuffix(tumbls[i], "@twitter") {
+					idx := strings.Index(tumbls[i], "@twitter")
+					tumblrs[i], err = NewCachedTumblr(tumbls[i][:idx], NewNitter)
+				} else {
+					tumblrs[i], err = NewCachedTumblr(tumbls[i], NewTumblrRSS)
+				}
 				wg.Done()
 			}(i)
 		}
 		wg.Wait()
 		tumblr = MergeTumblrs(tumblrs...)
 	} else {
-		tumblr, err = NewCachedTumblr(tumbl, NewTumblrRSS)
+		if strings.HasSuffix(tumbl, "@twitter") {
+			idx := strings.Index(tumbl, "@twitter")
+			tumblr, err = NewCachedTumblr(tumbl[:idx], NewNitter)
+		} else {
+			tumblr, err = NewCachedTumblr(tumbl, NewTumblrRSS)
+		}
 	}
 	if err != nil {
 		log.Println("open:", err)
