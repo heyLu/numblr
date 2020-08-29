@@ -9,6 +9,8 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
+	"path"
 	"regexp"
 	"strings"
 	"sync"
@@ -37,6 +39,7 @@ func (p Post) IsReblog() bool {
 
 var imgRE = regexp.MustCompile(`<img `)
 var linkRE = regexp.MustCompile(`<a `)
+var tumblrLinksRE = regexp.MustCompile(`https?://([^.]+).tumblr.com([^" ]+)?`)
 var videoRE = regexp.MustCompile(`<video `)
 var autoplayRE = regexp.MustCompile(` autoplay="autoplay"`)
 
@@ -233,6 +236,19 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 		})
 		postHTML = linkRE.ReplaceAllStringFunc(postHTML, func(repl string) string {
 			return `<a rel="noreferrer" `
+		})
+		postHTML = tumblrLinksRE.ReplaceAllStringFunc(postHTML, func(repl string) string {
+			u, err := url.Parse(repl)
+			if err != nil {
+				log.Printf("could not parse url: %s", err)
+				return repl
+			}
+
+			tumblrName := u.Host[:strings.Index(u.Host, ".")]
+			u.Host = ""
+			u.Scheme = ""
+			u.Path = path.Join(tumblrName, u.Path)
+			return u.String()
 		})
 		postHTML = videoRE.ReplaceAllStringFunc(postHTML, func(repl string) string {
 			return `<video preload="metadata" controls="" `
