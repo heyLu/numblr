@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"time"
 )
 
 const NitterDate = "Mon, 2 Jan 2006 15:04:05 MST"
 
+// NewNitter creates a new feed for Twitter, via Nitter.
+//
+// See https://github.com/zedeus/nitter.
 func NewNitter(name string) (Tumblr, error) {
 	rssURL := fmt.Sprintf("https://nitter.net/%s/rss", name)
 	resp, err := http.Get(rssURL)
@@ -33,41 +35,13 @@ func NewNitter(name string) (Tumblr, error) {
 		return nil, fmt.Errorf("skip token: %w", err)
 	}
 
-	return &nitterRSS{name: name, r: resp.Body, dec: dec}, nil
+	return &nitterRSS{tumblrRSS{name: name, r: resp.Body, dec: dec, dateFormat: NitterDate}}, nil
 }
 
 type nitterRSS struct {
-	name string
-	r    io.ReadCloser
-	dec  *xml.Decoder
-}
-
-func (nr *nitterRSS) Name() string {
-	return nr.name
+	tumblrRSS
 }
 
 func (nr *nitterRSS) URL() string {
 	return fmt.Sprintf("https://nitter.net/%s/rss", nr.name)
-}
-
-func (nr *nitterRSS) Next() (*Post, error) {
-	var post Post
-	err := nr.dec.Decode(&post)
-	if err != nil {
-		return nil, fmt.Errorf("decode: %w", err)
-	}
-
-	post.Author = nr.name
-
-	t, dateErr := time.Parse(NitterDate, post.DateString)
-	if dateErr != nil {
-		return nil, fmt.Errorf("invalid date %q: %s", post.DateString, dateErr)
-	}
-	post.Date = t
-
-	return &post, err
-}
-
-func (nr *nitterRSS) Close() error {
-	return nr.r.Close()
 }

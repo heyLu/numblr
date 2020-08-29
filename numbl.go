@@ -551,13 +551,14 @@ func NewTumblrRSS(name string) (Tumblr, error) {
 		return nil, fmt.Errorf("skip token: %w", err)
 	}
 
-	return &tumblrRSS{name: name, r: resp.Body, dec: dec}, nil
+	return &tumblrRSS{name: name, r: resp.Body, dec: dec, dateFormat: TumblrDate}, nil
 }
 
 type tumblrRSS struct {
-	name string
-	r    io.ReadCloser
-	dec  *xml.Decoder
+	name       string
+	r          io.ReadCloser
+	dec        *xml.Decoder
+	dateFormat string
 }
 
 func (tr *tumblrRSS) Name() string {
@@ -577,7 +578,7 @@ func (tr *tumblrRSS) Next() (*Post, error) {
 
 	post.Author = tr.name
 
-	t, dateErr := time.Parse(TumblrDate, post.DateString)
+	t, dateErr := time.Parse(tr.dateFormat, post.DateString)
 	if dateErr != nil {
 		return nil, fmt.Errorf("invalid date %q: %s", post.DateString, dateErr)
 	}
