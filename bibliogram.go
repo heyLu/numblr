@@ -5,13 +5,15 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 )
 
 // NewBibliogram creates a new feed for Instagram, via Bibliogram.
 //
 // See https://git.sr.ht/~cadence/bibliogram.
 func NewBibliogram(name string) (Tumblr, error) {
-	rssURL := fmt.Sprintf("https://bibliogram.snopyta.org/u/%s/rss.xml", name)
+	nameIdx := strings.Index(name, "@")
+	rssURL := fmt.Sprintf("https://bibliogram.snopyta.org/u/%s/rss.xml", name[:nameIdx])
 	resp, err := http.Get(rssURL)
 	if err != nil {
 		return nil, fmt.Errorf("download %q: %w", name, err)

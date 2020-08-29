@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 )
 
 const NitterDate = "Mon, 2 Jan 2006 15:04:05 MST"
@@ -13,7 +14,8 @@ const NitterDate = "Mon, 2 Jan 2006 15:04:05 MST"
 //
 // See https://github.com/zedeus/nitter.
 func NewNitter(name string) (Tumblr, error) {
-	rssURL := fmt.Sprintf("https://nitter.net/%s/rss", name)
+	nameIdx := strings.Index(name, "@")
+	rssURL := fmt.Sprintf("https://nitter.net/%s/rss", name[:nameIdx])
 	resp, err := http.Get(rssURL)
 	if err != nil {
 		return nil, fmt.Errorf("download %q: %w", name, err)
@@ -43,5 +45,6 @@ type nitterRSS struct {
 }
 
 func (nr *nitterRSS) URL() string {
-	return fmt.Sprintf("https://nitter.net/%s/rss", nr.name)
+	nameIdx := strings.Index(nr.name, "@")
+	return fmt.Sprintf("https://nitter.net/%s/rss", nr.name[:nameIdx])
 }

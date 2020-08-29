@@ -444,11 +444,9 @@ type Tumblr interface {
 func NewCachedFeed(name string) (Tumblr, error) {
 	switch {
 	case strings.HasSuffix(name, "@twitter"):
-		idx := strings.Index(name, "@twitter")
-		return NewCachedTumblr(name[:idx], NewNitter)
+		return NewCachedTumblr(name, NewNitter)
 	case strings.HasSuffix(name, "@instagram"):
-		idx := strings.Index(name, "@instagram")
-		return NewCachedTumblr(name[:idx], NewBibliogram)
+		return NewCachedTumblr(name, NewBibliogram)
 	default:
 		return NewCachedTumblr(name, NewTumblrRSS)
 	}
