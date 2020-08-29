@@ -185,24 +185,14 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 		wg.Add(len(tumbls))
 		for i := range tumbls {
 			go func(i int) {
-				if strings.HasSuffix(tumbls[i], "@twitter") {
-					idx := strings.Index(tumbls[i], "@twitter")
-					tumblrs[i], err = NewCachedTumblr(tumbls[i][:idx], NewNitter)
-				} else {
-					tumblrs[i], err = NewCachedTumblr(tumbls[i], NewTumblrRSS)
-				}
+				tumblrs[i], err = NewCachedFeed(tumbls[i])
 				wg.Done()
 			}(i)
 		}
 		wg.Wait()
 		tumblr = MergeTumblrs(tumblrs...)
 	} else {
-		if strings.HasSuffix(tumbl, "@twitter") {
-			idx := strings.Index(tumbl, "@twitter")
-			tumblr, err = NewCachedTumblr(tumbl[:idx], NewNitter)
-		} else {
-			tumblr, err = NewCachedTumblr(tumbl, NewTumblrRSS)
-		}
+		tumblr, err = NewCachedFeed(tumbl)
 	}
 	if err != nil {
 		log.Println("open:", err)
@@ -449,6 +439,19 @@ type Tumblr interface {
 	URL() string
 	Next() (*Post, error)
 	Close() error
+}
+
+func NewCachedFeed(name string) (Tumblr, error) {
+	switch {
+	case strings.HasSuffix(name, "@twitter"):
+		idx := strings.Index(name, "@twitter")
+		return NewCachedTumblr(name[:idx], NewNitter)
+	case strings.HasSuffix(name, "@instagram"):
+		idx := strings.Index(name, "@instagram")
+		return NewCachedTumblr(name[:idx], NewBibliogram)
+	default:
+		return NewCachedTumblr(name, NewTumblrRSS)
+	}
 }
 
 func NewCachedTumblr(name string, uncachedFn func(name string) (Tumblr, error)) (Tumblr, error) {
