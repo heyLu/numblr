@@ -48,3 +48,17 @@ func (nr *nitterRSS) URL() string {
 	nameIdx := strings.Index(nr.name, "@")
 	return fmt.Sprintf("https://nitter.net/%s/rss", nr.name[:nameIdx])
 }
+
+func (nr *nitterRSS) Next() (*Post, error) {
+	post, err := nr.tumblrRSS.Next()
+	if err != nil {
+		return nil, err
+	}
+
+	// skip pinned posts as they mess up post sorting (for now)
+	if strings.HasPrefix(post.Title, "Pinned: ") {
+		return nr.tumblrRSS.Next()
+	}
+
+	return post, nil
+}
