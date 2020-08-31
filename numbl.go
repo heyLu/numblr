@@ -115,6 +115,7 @@ Disallow: /`)
 		http.SetCookie(w, &http.Cookie{
 			Name:     CookieName,
 			Value:    cookieValue,
+			MaxAge:   365 * 24 * 60 * 60, // one year
 			SameSite: http.SameSiteLaxMode,
 			HttpOnly: true,
 		})
