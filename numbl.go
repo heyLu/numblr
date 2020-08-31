@@ -33,8 +33,10 @@ type Post struct {
 	Date            time.Time
 }
 
+var isReblogRE = regexp.MustCompile(`\s*[-_a-zA-Z0-9]+:`)
+
 func (p Post) IsReblog() bool {
-	return strings.Contains(p.DescriptionHTML, `class="tumblr_blog"`)
+	return isReblogRE.MatchString(p.Title) || strings.Contains(p.DescriptionHTML, `class="tumblr_blog"`)
 }
 
 var imgRE = regexp.MustCompile(`<img `)
@@ -227,7 +229,11 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 		fmt.Fprintf(w, `<article class=%q>`, strings.Join(classes, " "))
 		fmt.Fprintf(w, "<p>%s:<p>", post.Author)
 
-		postHTML := html.UnescapeString(post.DescriptionHTML)
+		postHTML := ""
+		if post.Title != "Photo" && !post.IsReblog() {
+			postHTML = html.UnescapeString(post.Title)
+		}
+		postHTML += html.UnescapeString(post.DescriptionHTML)
 		// load first 5 images eagerly, and the rest lazily
 		postHTML = imgRE.ReplaceAllStringFunc(postHTML, func(repl string) string {
 			imageCount++
