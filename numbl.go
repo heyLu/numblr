@@ -156,7 +156,7 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 
 	w.Header().Set("Content-Type", "text/html")
 
-	nightModeCSS := `body { color: #fff; background-color: #222; }.tags { color: #b7b7b7 }a { color: pink; }a:visited { color: #a67070; }`
+	nightModeCSS := `body { color: #fff; background-color: #222; }.tags { color: #b7b7b7 }a { color: pink; }a:visited { color: #a67070; }article{ border-bottom: 1px solid #666; }`
 	modeCSS := `@media (prefers-color-scheme: dark) {` + nightModeCSS + `}`
 	if _, ok := req.URL.Query()["night-mode"]; ok {
 		modeCSS = nightModeCSS
@@ -230,6 +230,8 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 		fmt.Fprintf(w, `<article class=%q>`, strings.Join(classes, " "))
 		fmt.Fprintf(w, "<p>%s:<p>", post.Author)
 
+		fmt.Fprintln(w, `<section class="post-content">`)
+
 		postHTML := ""
 		if post.Title != "Photo" && !post.IsReblog() {
 			postHTML = html.UnescapeString(post.Title)
@@ -268,6 +270,8 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 		})
 
 		fmt.Fprint(w, postHTML)
+
+		fmt.Fprintln(w, `</section>`)
 
 		fmt.Fprint(w, "<footer>")
 		if len(post.Tags) > 0 {
