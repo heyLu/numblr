@@ -168,7 +168,7 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 	<meta name="viewport" content="width=device-width,minimum-scale=1,initial-scale=1" />
 	<meta name="description" content="Mirror of %s tumblrs" />
 	<title>%s</title>
-	<style>h1 { word-break: break-all; }blockquote, figure { margin: 0; }body { font-family: sans-serif; }article{ border-bottom: 1px solid black; padding: 1em 0; }.tags { list-style: none; padding: 0; font-size: smaller; color: #666; }.tags > li { display: inline }img, video, iframe { max-width: 95vw; }@media (min-width: 60em) { body { margin-left: 15vw; } article { max-width: 60em; } img, video { max-height: 20vh; } img:hover, video:hover { max-height: 100%%; }}%s</style>
+	<style>h1 { word-break: break-all; }blockquote, figure { margin: 0; }body { font-family: sans-serif; }article{ border-bottom: 1px solid black; padding: 1em 0; }.tags { list-style: none; padding: 0; color: #666; }.tags > li { display: inline }img, video, iframe { max-width: 95vw; }@media (min-width: 60em) { body { margin-left: 15vw; } article { max-width: 60em; } img, video { max-height: 20vh; } img:hover, video:hover { max-height: 100%%; }}%s</style>
 	<link rel="preconnect" href="https://64.media.tumblr.com/" />
 	<link rel="manifest" href="/manifest.webmanifest" />
 </head>
