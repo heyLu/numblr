@@ -156,10 +156,10 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 
 	w.Header().Set("Content-Type", "text/html")
 
-	darkModeCSS := `body { color: #bbb; background-color: #333; }`
-	modeCSS := `@media (prefers-color-scheme: dark) {` + darkModeCSS + `}`
+	nightModeCSS := `body { color: #fff; background-color: #222; }.tags { color: #b7b7b7 }a { color: pink; }a:visited { color: #a67070; }`
+	modeCSS := `@media (prefers-color-scheme: dark) {` + nightModeCSS + `}`
 	if _, ok := req.URL.Query()["night-mode"]; ok {
-		modeCSS = darkModeCSS
+		modeCSS = nightModeCSS
 	}
 	fmt.Fprintf(w, `<!doctype html>
 <html lang="en">
