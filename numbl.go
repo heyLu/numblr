@@ -83,12 +83,12 @@ Disallow: /`)
 		w.Header().Set("Content-Type", "application/manifest+json")
 
 		fmt.Fprintln(w, `{
-  "name": "Numbl",
-  "short_name": "numbl",
+  "name": "Numblr",
+  "short_name": "numblr",
   "start_url": ".",
-  "display": "standalone",
-  "background_color": "#bbb",
-  "description": "A bare-bones mirror for tumblrs.",
+  "display": "fullscreen",
+  "background_color": "#222",
+  "description": "A bare-bones mirror for tumblrs."
 }`)
 	})
 
