@@ -17,7 +17,8 @@ reload_run:
 reload_test:
 	git ls-files --cached --others | grep -v '_test.go$$' | grep '.go$$' | entr -c -r go test .
 
-lighthouse: lighthouse.html
-
-lighthouse.html:
+lighthouse:
 	lighthouse --chrome-flags='--headless' --output-path=lighthouse.html http://localhost:5555
+
+lighthouse_url:
+	lighthouse --chrome-flags='--headless' --output-path=lighthouse_url.html "$(URL)"
