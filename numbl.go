@@ -69,8 +69,9 @@ func main() {
 	router := mux.NewRouter()
 	router.Use(gziphandler.GzipHandler)
 
-	router.HandleFunc("/favicon.ico", func(w http.ResponseWriter, req *http.Request) {
-		http.Error(w, "not found", http.StatusNotFound)
+	router.HandleFunc("/favicon.png", func(w http.ResponseWriter, req *http.Request) {
+		w.Header().Set("Content-Type", "image/png")
+		w.Write(FaviconPNGBytes)
 		return
 	})
 
@@ -84,12 +85,34 @@ Disallow: /`)
 
 		fmt.Fprintln(w, `{
   "name": "Numblr",
+  "description": "A bare-bones mirror for tumblrs.",
   "short_name": "numblr",
-  "start_url": ".",
+  "lang": "en",
+  "start_url": "/",
+  "icons": [{
+    "src": "/favicon.png",
+    "sizes": "192x192",
+	 "purpose": "any maskable",
+	 "type": "image/png"
+  }],
   "display": "fullscreen",
-  "background_color": "#222",
-  "description": "A bare-bones mirror for tumblrs."
+  "orientation": "portrait",
+  "background_color": "#222222",
+  "theme_color": "#222222"
 }`)
+	})
+	// required to be registered as a progressive web app (?)
+	router.HandleFunc("/service-worker.js", func(w http.ResponseWriter, req *http.Request) {
+		w.Header().Set("Content-Type", "text/javascript")
+		fmt.Fprint(w, `// required to be registered as a progressive web app
+// may cache things later, or provide notifications
+
+self.addEventListener('install', function(e) {
+  e.waitUntil(Promise.resolve()).then(() => {
+    console.log("numblr installed!");
+  });
+});
+`)
 	})
 
 	router.HandleFunc("/settings", func(w http.ResponseWriter, req *http.Request) {
@@ -171,6 +194,8 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 	<style>h1 { word-break: break-all; }blockquote, figure { margin: 0; }blockquote:not(:last-child) { border-bottom: 1px solid #ddd; } blockquote > blockquote:nth-child(1) { border-bottom: 0; }body { font-family: sans-serif; }article{ border-bottom: 1px solid black; padding: 1em 0; }.tags { list-style: none; padding: 0; color: #666; }.tags > li { display: inline }img, video, iframe { max-width: 95vw; }@media (min-width: 60em) { body { margin-left: 15vw; } article { max-width: 60em; } img, video { max-height: 20vh; } img:hover, video:hover { max-height: 100%%; }}%s</style>
 	<link rel="preconnect" href="https://64.media.tumblr.com/" />
 	<link rel="manifest" href="/manifest.webmanifest" />
+	<meta name="theme_color" content="#222222" />
+	<link rel="icon" href="/favicon.png" />
 </head>
 
 <body>
@@ -321,6 +346,12 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
       window.location.reload();
     }
   }, {passive: true});
+
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/service-worker.js')
+      .then(() => console.log("numblr registered!"))
+		.catch((err) => console.log("numblr registration failed: ", err));
+  }
 </script>`)
 
 	fmt.Fprintln(w, `</body>
