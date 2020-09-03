@@ -6,7 +6,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"html"
 	"io"
 	"log"
 	"net/http"
@@ -20,6 +19,7 @@ import (
 	"github.com/NYTimes/gziphandler"
 	"github.com/gorilla/mux"
 	"github.com/hashicorp/golang-lru"
+	"golang.org/x/net/html"
 )
 
 const TumblrDate = "Mon, 2 Jan 2006 15:04:05 -0700"
@@ -181,8 +181,12 @@ self.addEventListener('install', function(e) {
 	}).Methods("POST")
 
 	router.HandleFunc("/avatar/{tumblr}", HandleAvatar)
+
 	router.HandleFunc("/{tumblrs}", HandleTumblr)
 	router.HandleFunc("/", HandleTumblr)
+
+	router.HandleFunc("/{tumblr}/post/{postId}", HandlePost)
+	router.HandleFunc("/{tumblr}/post/{postId}/{slug}", HandlePost)
 
 	http.Handle("/", router)
 
@@ -461,6 +465,74 @@ func prettyDuration(dur time.Duration) string {
 		}
 		return fmt.Sprintf("%d years", years)
 	}
+}
+
+func HandlePost(w http.ResponseWriter, req *http.Request) {
+	tumblr := mux.Vars(req)["tumblr"]
+	postId := mux.Vars(req)["postId"]
+	slug := mux.Vars(req)["slug"]
+	if slug != "" {
+		slug = "/" + slug
+	}
+	resp, err := http.Get(fmt.Sprintf("https://%s.tumblr.com/post/%s%s", tumblr, postId, slug))
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error: could not fetch post: %s", err), http.StatusInternalServerError)
+		return
+	}
+	defer resp.Body.Close()
+
+	nightModeCSS := `* { color: #fff !important; background-color: #222 !important; }.tags { color: #b7b7b7 }a { color: pink; }a:visited { color: #a67070; }article{ border-bottom: 1px solid #666; }blockquote:not(:last-child) { border-bottom: 1px solid #333; }a.author,a.author:visited{color: #fff;}`
+	modeCSS := `@media (prefers-color-scheme: dark) {` + nightModeCSS + `}`
+	if _, ok := req.URL.Query()["night-mode"]; ok {
+		modeCSS = nightModeCSS
+	}
+	fmt.Fprintf(w, `<!doctype html>
+<html>
+<head>
+
+	<style>h1 { word-break: break-all; }blockquote, figure { margin: 0; }blockquote:not(:last-child) { border-bottom: 1px solid #ddd; } blockquote > blockquote:nth-child(1) { border-bottom: 0; }body { font-family: sans-serif; }article{ border-bottom: 1px solid black; padding: 1em 0; }.tags { list-style: none; padding: 0; color: #666; }.tags > li { display: inline }img, video, iframe { max-width: 95vw; }@media (min-width: 60em) { body { margin-left: 15vw; } article { max-width: 60em; } img, video { max-height: 20vh; width: auto; } img:hover, video:hover { max-height: 100%%; }}.avatar{height: 1em;}a.author,a.author:visited{color: #000;}%s</style>
+</head>
+
+<body>
+`, modeCSS)
+
+	node, err := html.Parse(resp.Body)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error: could not parse post: %s", err), http.StatusInternalServerError)
+		return
+	}
+
+	var f func(*html.Node)
+	f = func(node *html.Node) {
+		if node.Type == html.ElementNode {
+			switch node.Data {
+			case "a", "p", "img", "div", "span":
+				if hasAttribute(node, "class", "app-nag") {
+					return
+				}
+
+				err := html.Render(w, node)
+				if err != nil {
+					log.Printf("Error: rendering %q: %s", req.URL, err)
+				}
+
+				return
+			}
+		}
+		for c := node.FirstChild; c != nil; c = c.NextSibling {
+			f(c)
+		}
+	}
+	f(node)
+}
+
+func hasAttribute(node *html.Node, attrName, attrValue string) bool {
+	for _, attr := range node.Attr {
+		if attr.Key == attrName && attr.Val == attrValue {
+			return true
+		}
+	}
+	return false
 }
 
 func MergeTumblrs(tumblrs ...Tumblr) Tumblr {
