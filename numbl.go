@@ -95,7 +95,7 @@ Disallow: /`)
 	 "purpose": "any maskable",
 	 "type": "image/png"
   }],
-  "display": "fullscreen",
+  "display": "standalone",
   "orientation": "portrait",
   "background_color": "#222222",
   "theme_color": "#222222"
