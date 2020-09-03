@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/xml"
 	"errors"
 	"flag"
@@ -53,8 +54,17 @@ var config struct {
 }
 
 const CacheTime = 10 * time.Minute
+const AvatarSize = 64
+const AvatarCacheTime = 30 * 24 * time.Hour
 
 var cache *lru.Cache
+var avatarCache *lru.Cache
+
+var httpClient = &http.Client{
+	CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	},
+}
 
 func main() {
 	flag.StringVar(&config.DefaultTumblr, "default", "nettleforest", "Default tumblr to view")
@@ -64,6 +74,10 @@ func main() {
 	cache, err = lru.New(100)
 	if err != nil {
 		log.Fatal("setup cache:", err)
+	}
+	avatarCache, err = lru.New(100)
+	if err != nil {
+		log.Fatal("setup avatar cache:", err)
 	}
 
 	router := mux.NewRouter()
@@ -116,6 +130,7 @@ self.addEventListener('install', function(e) {
 	})
 
 	router.HandleFunc("/settings", func(w http.ResponseWriter, req *http.Request) {
+		list := req.FormValue("list")
 		tumblrs := req.FormValue("tumblrs")
 
 		first := true
@@ -137,8 +152,13 @@ self.addEventListener('install', function(e) {
 			return
 		}
 
+		cookieName := CookieName
+		if list != "" {
+			cookieName = CookieName + "-list-" + list
+		}
+
 		http.SetCookie(w, &http.Cookie{
-			Name:     CookieName,
+			Name:     cookieName,
 			Value:    cookieValue,
 			MaxAge:   365 * 24 * 60 * 60, // one year
 			SameSite: http.SameSiteLaxMode,
@@ -160,6 +180,7 @@ self.addEventListener('install', function(e) {
 		http.Redirect(w, req, "/", http.StatusSeeOther)
 	}).Methods("POST")
 
+	router.HandleFunc("/avatar/{tumblr}", HandleAvatar)
 	router.HandleFunc("/{tumblrs}", HandleTumblr)
 	router.HandleFunc("/", HandleTumblr)
 
@@ -168,6 +189,43 @@ self.addEventListener('install', function(e) {
 	addr := "localhost:5555"
 	log.Printf("Listening on http://%s", addr)
 	log.Fatal(http.ListenAndServe(addr, nil))
+}
+
+func HandleAvatar(w http.ResponseWriter, req *http.Request) {
+	tumblr := mux.Vars(req)["tumblr"]
+
+	avatar, isCached := avatarCache.Get(tumblr)
+	if isCached {
+		w.Header().Set("Cache-Control", fmt.Sprintf("public, max-age=%d, immutable", int(AvatarCacheTime.Seconds())))
+		w.Write(avatar.([]byte))
+		return
+	}
+
+	resp, err := http.Get(fmt.Sprintf("https://api.tumblr.com/v2/blog/%s.tumblr.com/avatar/%d", url.PathEscape(tumblr), AvatarSize))
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error: fetching avatar: %s", err), http.StatusInternalServerError)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		http.Error(w, fmt.Sprintf("Error: fetching avatar: unexpected status code %d", resp.StatusCode), http.StatusInternalServerError)
+		return
+	}
+
+	buf := new(bytes.Buffer)
+	wr := io.MultiWriter(w, buf)
+
+	avatar = resp.Header.Get("Location")
+	w.Header().Set("Cache-Control", fmt.Sprintf("max-age=%d", int(AvatarCacheTime.Seconds())))
+
+	_, err = io.Copy(wr, resp.Body)
+	if err != nil {
+		log.Printf("could not write avatar: %s", err)
+		return
+	}
+
+	avatarCache.Add(tumblr, buf.Bytes())
 }
 
 func HandleTumblr(w http.ResponseWriter, req *http.Request) {
@@ -191,7 +249,7 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 	<meta name="viewport" content="width=device-width,minimum-scale=1,initial-scale=1" />
 	<meta name="description" content="Mirror of %s tumblrs" />
 	<title>%s</title>
-	<style>h1 { word-break: break-all; }blockquote, figure { margin: 0; }blockquote:not(:last-child) { border-bottom: 1px solid #ddd; } blockquote > blockquote:nth-child(1) { border-bottom: 0; }body { font-family: sans-serif; }article{ border-bottom: 1px solid black; padding: 1em 0; }.tags { list-style: none; padding: 0; color: #666; }.tags > li { display: inline }img, video, iframe { max-width: 95vw; }@media (min-width: 60em) { body { margin-left: 15vw; } article { max-width: 60em; } img, video { max-height: 20vh; } img:hover, video:hover { max-height: 100%%; }}%s</style>
+	<style>h1 { word-break: break-all; }blockquote, figure { margin: 0; }blockquote:not(:last-child) { border-bottom: 1px solid #ddd; } blockquote > blockquote:nth-child(1) { border-bottom: 0; }body { font-family: sans-serif; }article{ border-bottom: 1px solid black; padding: 1em 0; }.tags { list-style: none; padding: 0; color: #666; }.tags > li { display: inline }img, video, iframe { max-width: 95vw; }@media (min-width: 60em) { body { margin-left: 15vw; } article { max-width: 60em; } img, video { max-height: 20vh; } img:hover, video:hover { max-height: 100%%; }}.avatar{height: 1em;}%s</style>
 	<link rel="preconnect" href="https://64.media.tumblr.com/" />
 	<link rel="manifest" href="/manifest.webmanifest" />
 	<meta name="theme_color" content="#222222" />
@@ -253,7 +311,7 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 		}
 		postCount++
 		fmt.Fprintf(w, `<article class=%q>`, strings.Join(classes, " "))
-		fmt.Fprintf(w, "<p>%s:<p>", post.Author)
+		fmt.Fprintf(w, `<p><img class="avatar" src="/avatar/%s" /> %s:<p>`, post.Author, post.Author)
 
 		fmt.Fprintln(w, `<section class="post-content">`)
 
