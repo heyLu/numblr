@@ -278,18 +278,28 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 		for i := range tumbls {
 			go func(i int) {
 				tumblrs[i], err = NewCachedFeed(tumbls[i])
+				if err != nil {
+					err = fmt.Errorf("%s: %w", tumbls[i], err)
+				}
 				wg.Done()
 			}(i)
 		}
 		wg.Wait()
-		tumblr = MergeTumblrs(tumblrs...)
+		successfulTumblrs := make([]Tumblr, 0, len(tumbls))
+		for _, tumblr := range tumblrs {
+			if tumblr == nil {
+				continue
+			}
+			successfulTumblrs = append(successfulTumblrs, tumblr)
+		}
+		tumblr = MergeTumblrs(successfulTumblrs...)
 	} else {
 		tumblr, err = NewCachedFeed(tumbl)
 	}
 	if err != nil {
 		log.Println("open:", err)
+		fmt.Fprintf(w, `<code style="color: red; font-weight: bold; font-size: larger;">could not load tumblr: %s</code>`, err)
 		if tumblr == nil {
-			fmt.Fprintf(w, `<code style="color: red; font-weight: bold; font-size: larger;">could not load tumblr: %s</code>`, err)
 			return
 		}
 	}
