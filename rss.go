@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"path"
+	"net/url"
 	"strings"
 	"time"
 
@@ -17,20 +17,25 @@ import (
 var RelAlternateMatcher = cascadia.MustCompile(`link[rel=alternate]`)
 
 func NewRSS(name string) (Tumblr, error) {
-	url := name
+	feedURL := name
 	if strings.Contains(name, "@") {
 		parts := strings.SplitN(name, "@", 2)
 		if len(parts) == 0 {
 			return nil, fmt.Errorf("unrecognized feed %q", name)
 		}
-		url = parts[1] + "/@" + parts[0]
+		feedURL = parts[1] + "/@" + parts[0]
 	}
 
-	if !strings.HasPrefix(url, "http") {
-		url = "http://" + url
+	if !strings.HasPrefix(feedURL, "http") {
+		feedURL = "http://" + feedURL
 	}
 
-	resp, err := http.Get(url)
+	baseURL, err := url.Parse(feedURL)
+	if err != nil {
+		return nil, fmt.Errorf("invalid url %q: %w", feedURL, err)
+	}
+
+	resp, err := http.Get(feedURL)
 	if err != nil {
 		return nil, fmt.Errorf("open: %w", err)
 	}
@@ -75,11 +80,12 @@ func NewRSS(name string) (Tumblr, error) {
 			return nil, fmt.Errorf("no feed found")
 		}
 
-		if !strings.HasPrefix(url, "http") {
-			url = "http://" + path.Join(name, url)
+		feedURL, err := baseURL.Parse(url)
+		if err != nil {
+			return nil, fmt.Errorf("invalid feed url %q: %w", url, err)
 		}
 
-		resp, err := http.Get(url)
+		resp, err := http.Get(feedURL.String())
 		if err != nil {
 			return nil, fmt.Errorf("open feed: %w", err)
 		}

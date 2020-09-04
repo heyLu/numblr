@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
 )
 
@@ -13,6 +14,9 @@ const NitterDate = "Mon, 2 Jan 2006 15:04:05 MST"
 func NewNitter(name string) (Tumblr, error) {
 	nameIdx := strings.Index(name, "@")
 	rssURL := fmt.Sprintf("https://nitter.net/%s/rss", name[:nameIdx])
+	if strings.HasPrefix(name[:nameIdx], "#") {
+		rssURL = fmt.Sprintf("https://nitter.net/search?q=%s", url.QueryEscape(name[:nameIdx]))
+	}
 
 	feed, err := NewRSS(rssURL)
 	if err != nil {
