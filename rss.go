@@ -124,6 +124,7 @@ func (rss *rss) Next() (*Post, error) {
 	}
 	return &Post{
 		Author:          rss.name,
+		URL:             item.Link,
 		Title:           fmt.Sprintf(`<h1>%s</h1>`, item.Title),
 		DescriptionHTML: item.Content,
 		Tags:            item.Categories,
