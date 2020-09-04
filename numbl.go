@@ -252,6 +252,7 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 	start := time.Now()
 
 	tumbl := tumblsFromRequest(req)
+	tumbls := strings.Split(tumbl, ",")
 
 	search := req.URL.Query().Get("search")
 
@@ -261,6 +262,12 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 	modeCSS := `@media (prefers-color-scheme: dark) {` + nightModeCSS + `}`
 	if _, ok := req.URL.Query()["night-mode"]; ok {
 		modeCSS = nightModeCSS
+	}
+	title := tumbl
+	if req.URL.Path == "" || req.URL.Path == "/" {
+		title = "everything"
+	} else if mux.Vars(req)["list"] != "" {
+		title = mux.Vars(req)["list"]
 	}
 	fmt.Fprintf(w, `<!doctype html>
 <html lang="en">
@@ -280,14 +287,13 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 
 <h1>%s</h1>
 
-`, tumbl, tumbl, modeCSS, tumbl)
+`, tumbl, title, modeCSS, title)
 
 	fmt.Fprintf(w, `<form method="GET" action=%q><input aria-label="search posts" name="search" type="search" value=%q placeholder="noreblog #art ..." /></form>`, req.URL.Path, search)
 
 	var tumblr Tumblr
 	var err error
 	if strings.Contains(tumbl, ",") {
-		tumbls := strings.Split(tumbl, ",")
 		tumblrs := make([]Tumblr, len(tumbls))
 		var wg sync.WaitGroup
 		wg.Add(len(tumbls))
@@ -405,7 +411,6 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 		nextPost()
 	}
 
-	tumbls := strings.Split(tumbl, ",")
 	fmt.Fprintf(w, `<form method="POST" action="/settings">
 
 	<input type="text" name="list" hidden value=%q />
