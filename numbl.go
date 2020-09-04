@@ -251,6 +251,15 @@ func HandleAvatar(w http.ResponseWriter, req *http.Request) {
 func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 	start := time.Now()
 
+	if req.URL.Query().Get("feed") != "" {
+		feed := req.URL.Query().Get("feed")
+		if strings.ContainsAny(feed, "#?") {
+			feed = url.PathEscape(feed)
+		}
+		http.Redirect(w, req, "/"+feed, http.StatusFound)
+		return
+	}
+
 	tumbl := tumblsFromRequest(req)
 	tumbls := strings.Split(tumbl, ",")
 
@@ -289,6 +298,7 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 
 `, tumbl, title, modeCSS, title)
 
+	fmt.Fprintf(w, `<form method="GET" action=%q><input aria-label="visit feed" name="feed" type="search" value="" placeholder="feed" /></form>`, req.URL.Path)
 	fmt.Fprintf(w, `<form method="GET" action=%q><input aria-label="search posts" name="search" type="search" value=%q placeholder="noreblog #art ..." /></form>`, req.URL.Path, search)
 
 	var tumblr Tumblr
