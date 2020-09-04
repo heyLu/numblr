@@ -205,7 +205,18 @@ func HandleAvatar(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	resp, err := http.Get(fmt.Sprintf("https://api.tumblr.com/v2/blog/%s.tumblr.com/avatar/%d", url.PathEscape(tumblr), AvatarSize))
+	var avatarURL string
+	switch {
+	case strings.Contains(tumblr, "@"):
+		http.Error(w, fmt.Sprintf("Error: fetching avatar for %q not supported", tumblr), http.StatusInternalServerError)
+		return
+	case strings.Contains(tumblr, "."):
+		avatarURL = "http://" + tumblr + "/favicon.ico"
+	default:
+		avatarURL = fmt.Sprintf("https://api.tumblr.com/v2/blog/%s.tumblr.com/avatar/%d", url.PathEscape(tumblr), AvatarSize)
+	}
+
+	resp, err := http.Get(avatarURL)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Error: fetching avatar: %s", err), http.StatusInternalServerError)
 		return
