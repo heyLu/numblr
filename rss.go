@@ -131,11 +131,20 @@ func (rss *rss) Next() (*Post, error) {
 		date = &t
 		dateString = date.UTC().Format(time.RFC3339)
 	}
+	content := item.Content
+	if content == "" {
+		content = item.Description
+	}
+	for _, encl := range item.Enclosures {
+		if strings.HasPrefix(encl.Type, "image") {
+			content += fmt.Sprintf(`<img src="%s" />`, encl.URL)
+		}
+	}
 	return &Post{
 		Author:          rss.name,
 		URL:             item.Link,
 		Title:           fmt.Sprintf(`<h1>%s</h1>`, item.Title),
-		DescriptionHTML: item.Content,
+		DescriptionHTML: content,
 		Tags:            item.Categories,
 		DateString:      dateString,
 		Date:            *date,
