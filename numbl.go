@@ -632,6 +632,8 @@ func NewCachedFeed(name string) (Tumblr, error) {
 		return NewCachedTumblr(name, NewNitter)
 	case strings.HasSuffix(name, "@instagram"):
 		return NewCachedTumblr(name, NewBibliogram)
+	case strings.Contains(name, "."):
+		return NewCachedTumblr(name, NewRSS)
 	default:
 		return NewCachedTumblr(name, NewTumblrRSS)
 	}
