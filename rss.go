@@ -26,7 +26,11 @@ func NewRSS(name string) (Tumblr, error) {
 		url = parts[1] + "/@" + parts[0]
 	}
 
-	resp, err := http.Get("http://" + url)
+	if !strings.HasPrefix(url, "http") {
+		url = "http://" + url
+	}
+
+	resp, err := http.Get(url)
 	if err != nil {
 		return nil, fmt.Errorf("open: %w", err)
 	}

@@ -1,10 +1,7 @@
 package main
 
 import (
-	"encoding/xml"
 	"fmt"
-	"io"
-	"net/http"
 	"strings"
 )
 
@@ -16,32 +13,23 @@ const NitterDate = "Mon, 2 Jan 2006 15:04:05 MST"
 func NewNitter(name string) (Tumblr, error) {
 	nameIdx := strings.Index(name, "@")
 	rssURL := fmt.Sprintf("https://nitter.net/%s/rss", name[:nameIdx])
-	resp, err := http.Get(rssURL)
+
+	feed, err := NewRSS(rssURL)
 	if err != nil {
-		return nil, fmt.Errorf("download %q: %w", name, err)
-	}
-	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("download %q: wrong response code: %d", rssURL, resp.StatusCode)
+		return nil, err
 	}
 
-	dec := xml.NewDecoder(resp.Body)
-	token, err := dec.Token()
-	for err == nil {
-		el, ok := token.(xml.EndElement)
-		if ok && el.Name.Local == "image" {
-			break
-		}
-		token, err = dec.Token()
-	}
-	if err != nil && err != io.EOF {
-		return nil, fmt.Errorf("skip token: %w", err)
-	}
-
-	return &nitterRSS{tumblrRSS{name: name, r: resp.Body, dec: dec, dateFormat: NitterDate}}, nil
+	return &nitterRSS{name: name, rss: feed.(*rss)}, nil
 }
 
 type nitterRSS struct {
-	tumblrRSS
+	name string
+
+	*rss
+}
+
+func (nr *nitterRSS) Name() string {
+	return nr.name
 }
 
 func (nr *nitterRSS) URL() string {
@@ -50,15 +38,17 @@ func (nr *nitterRSS) URL() string {
 }
 
 func (nr *nitterRSS) Next() (*Post, error) {
-	post, err := nr.tumblrRSS.Next()
+	post, err := nr.rss.Next()
 	if err != nil {
 		return nil, err
 	}
 
 	// skip pinned posts as they mess up post sorting (for now)
-	if strings.HasPrefix(post.Title, "Pinned: ") {
-		return nr.tumblrRSS.Next()
+	if strings.HasPrefix(post.Title, "<h1>Pinned: ") {
+		return nr.rss.Next()
 	}
+
+	post.Author = nr.name
 
 	return post, nil
 }
