@@ -17,7 +17,16 @@ import (
 var RelAlternateMatcher = cascadia.MustCompile(`link[rel=alternate]`)
 
 func NewRSS(name string) (Tumblr, error) {
-	resp, err := http.Get("http://" + name)
+	url := name
+	if strings.Contains(name, "@") {
+		parts := strings.SplitN(name, "@", 2)
+		if len(parts) == 0 {
+			return nil, fmt.Errorf("unrecognized feed %q", name)
+		}
+		url = parts[1] + "/@" + parts[0]
+	}
+
+	resp, err := http.Get("http://" + url)
 	if err != nil {
 		return nil, fmt.Errorf("open: %w", err)
 	}
