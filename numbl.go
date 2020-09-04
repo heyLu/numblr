@@ -467,7 +467,7 @@ func prettyDuration(dur time.Duration) string {
 	switch {
 	case dur < 24*time.Hour:
 		return dur.Round(time.Minute).String()
-	case dur < 7*24*time.Hour:
+	case dur < 30*24*time.Hour:
 		days := (int(dur.Hours()) / 24)
 		if days == 1 {
 			return "1 day"
