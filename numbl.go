@@ -181,13 +181,13 @@ self.addEventListener('install', function(e) {
 		http.Redirect(w, req, "/", http.StatusSeeOther)
 	}).Methods("POST")
 
-	router.HandleFunc("/avatar/{tumblr}", HandleAvatar)
-
-	router.HandleFunc("/{tumblrs}", HandleTumblr)
 	router.HandleFunc("/", HandleTumblr)
+	router.HandleFunc("/{tumblrs}", HandleTumblr)
 
 	router.HandleFunc("/{tumblr}/post/{postId}", HandlePost)
 	router.HandleFunc("/{tumblr}/post/{postId}/{slug}", HandlePost)
+
+	router.HandleFunc("/avatar/{tumblr}", HandleAvatar)
 
 	http.Handle("/", router)
 
