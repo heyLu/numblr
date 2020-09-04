@@ -148,14 +148,16 @@ self.addEventListener('install', function(e) {
 			cookieValue += tumblr
 		}
 
-		if cookieValue == "" {
-			http.Redirect(w, req, "/", http.StatusTemporaryRedirect)
-			return
-		}
-
+		redirect := "/"
 		cookieName := CookieName
 		if list != "" {
+			redirect = "/list/" + list
 			cookieName = CookieName + "-list-" + list
+		}
+
+		if cookieValue == "" {
+			http.Redirect(w, req, redirect, http.StatusTemporaryRedirect)
+			return
 		}
 
 		http.SetCookie(w, &http.Cookie{
@@ -165,7 +167,7 @@ self.addEventListener('install', function(e) {
 			SameSite: http.SameSiteLaxMode,
 			HttpOnly: true,
 		})
-		http.Redirect(w, req, "/", http.StatusSeeOther)
+		http.Redirect(w, req, redirect, http.StatusSeeOther)
 	}).Methods("POST")
 
 	router.HandleFunc("/settings/clear", func(w http.ResponseWriter, req *http.Request) {
@@ -183,6 +185,8 @@ self.addEventListener('install', function(e) {
 
 	router.HandleFunc("/", HandleTumblr)
 	router.HandleFunc("/{tumblrs}", HandleTumblr)
+
+	router.HandleFunc("/list/{list}", HandleTumblr)
 
 	router.HandleFunc("/{tumblr}/post/{postId}", HandlePost)
 	router.HandleFunc("/{tumblr}/post/{postId}/{slug}", HandlePost)
@@ -403,8 +407,10 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 
 	tumbls := strings.Split(tumbl, ",")
 	fmt.Fprintf(w, `<form method="POST" action="/settings">
-	<label for="tumblrs">Tumblrs to view by default</label>:
 
+	<input type="text" name="list" hidden value=%q />
+
+	<label for="tumblrs">Tumblrs to view by default</label>:
 	<div class="field">
 		<textarea rows="%d" cols="30" name="tumblrs">%s</textarea>
 	</div>
@@ -414,7 +420,20 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 <form method="POST" action="/settings/clear">
 	<input type="submit" value="Clear" title="FIXME: clear currently broken :/" disabled />
 </form>
-`, len(tumbls)+1, strings.Join(tumbls, "\n"))
+`, mux.Vars(req)["list"], len(tumbls)+1, strings.Join(tumbls, "\n"))
+
+	fmt.Fprintln(w, `<section id="lists">
+<h1>Lists</h1>
+
+<ul>`)
+	for _, cookie := range req.Cookies() {
+		if strings.HasPrefix(cookie.Name, CookieName+"-list-") {
+			listName := cookie.Name[len(CookieName+"-list-"):]
+			fmt.Fprintf(w, `<li><a href="/list/%s">%s</a></li>`, listName, listName)
+		}
+	}
+	fmt.Fprintln(w, `</ul>
+</section>`)
 
 	fmt.Fprintf(w, `<hr /><footer>%d posts from %q (<a href=%q>source</a>) in %s (open: %s)</footer>`, postCount, tumblr.Name(), tumblr.URL(), time.Since(start).Round(time.Millisecond), openTime.Round(time.Millisecond))
 	if err != nil && !errors.Is(err, io.EOF) {
@@ -447,13 +466,20 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 }
 
 func tumblsFromRequest(req *http.Request) string {
+	isList := strings.HasPrefix(req.URL.Path, "/list/")
+
 	// explicitely specified
 	tumbl := req.URL.Path[1:]
-	if tumbl != "" {
+	if tumbl != "" && !isList {
 		return tumbl
 	}
 
-	cookie, err := req.Cookie(CookieName)
+	cookieName := CookieName
+	if isList {
+		cookieName = CookieName + "-list-" + mux.Vars(req)["list"]
+	}
+
+	cookie, err := req.Cookie(cookieName)
 	if err != nil {
 		if err != http.ErrNoCookie {
 			log.Printf("getting cookie: %s", err)
