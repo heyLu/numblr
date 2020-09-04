@@ -26,6 +26,7 @@ const TumblrDate = "Mon, 2 Jan 2006 15:04:05 -0700"
 
 type Post struct {
 	Author          string
+	AvatarURL       string
 	URL             string   `xml:"link"`
 	Title           string   `xml:"title"`
 	DescriptionHTML string   `xml:"description"`
@@ -336,7 +337,11 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 		}
 		postCount++
 		fmt.Fprintf(w, `<article class=%q>`, strings.Join(classes, " "))
-		fmt.Fprintf(w, `<p><img class="avatar" src="/avatar/%s" /> <a class="author" href="/%s">%s</a>:<p>`, post.Author, post.Author, post.Author)
+		avatarURL := post.AvatarURL
+		if avatarURL == "" {
+			avatarURL = "/avatar/" + post.Author
+		}
+		fmt.Fprintf(w, `<p><img class="avatar" src="%s" /> <a class="author" href="/%s">%s</a>:<p>`, avatarURL, post.Author, post.Author)
 
 		fmt.Fprintln(w, `<section class="post-content">`)
 

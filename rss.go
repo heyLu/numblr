@@ -120,6 +120,11 @@ func (rss *rss) Next() (*Post, error) {
 	item := rss.feed.Items[0]
 	rss.feed.Items = rss.feed.Items[1:]
 
+	var avatarURL string
+	if rss.feed.Image != nil {
+		avatarURL = rss.feed.Image.URL
+	}
+
 	dateString := item.Published
 	date := item.PublishedParsed
 	if date == nil {
@@ -142,6 +147,7 @@ func (rss *rss) Next() (*Post, error) {
 	}
 	return &Post{
 		Author:          rss.name,
+		AvatarURL:       avatarURL,
 		URL:             item.Link,
 		Title:           fmt.Sprintf(`<h1>%s</h1>`, item.Title),
 		DescriptionHTML: content,
