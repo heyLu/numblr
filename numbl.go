@@ -41,7 +41,7 @@ func (p Post) IsReblog() bool {
 }
 
 var imgRE = regexp.MustCompile(`<img `)
-var widthHeightRE = regexp.MustCompile(` (width|height)="[^"]+"`)
+var widthHeightRE = regexp.MustCompile(` (width|height|style)="[^"]+"`)
 var linkRE = regexp.MustCompile(`<a `)
 var tumblrLinksRE = regexp.MustCompile(`https?://([^.]+).tumblr.com([^" ]+)?`)
 var videoRE = regexp.MustCompile(`<video `)
