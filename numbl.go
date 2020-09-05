@@ -465,6 +465,14 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
   window.addEventListener('touchmove', e => {
     const y = e.touches[0].pageY;
     if (document.scrollingElement.scrollTop === 0 && y > startY) {
+      let reloadStyleEl = document.createElement("style");
+      reloadStyleEl.textContent = "#reload { position: absolute; top: 1em; left: 50vw; animation: reload 3s infinite; } @keyframes reload { 0% { color: black; } 12.5% { color: violet; } 25% { color: blue; } 37.5% { color: green; } 50% { color: yellow; } 62.5% { color: orange; } 75% { color: red; } 87.5% { color: brown; } 100% { color: black; } }";
+      document.body.appendChild(reloadStyleEl);
+      let reloadEl = document.createElement("div");
+      reloadEl.id = "reload";
+      reloadEl.textContent = "✦";
+      document.body.appendChild(reloadEl);
+
       window.location.reload();
     }
   }, {passive: true});
