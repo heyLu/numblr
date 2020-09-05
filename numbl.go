@@ -25,6 +25,7 @@ import (
 const TumblrDate = "Mon, 2 Jan 2006 15:04:05 -0700"
 
 type Post struct {
+	ID              string `xml:"guid"`
 	Author          string
 	AvatarURL       string
 	URL             string   `xml:"link"`
@@ -52,12 +53,17 @@ var autoplayRE = regexp.MustCompile(` autoplay="autoplay"`)
 const CookieName = "numbl"
 
 var config struct {
+	Addr         string
+	DatabasePath string
+
 	DefaultTumblr string
 }
 
 const CacheTime = 10 * time.Minute
 const AvatarSize = 64
 const AvatarCacheTime = 30 * 24 * time.Hour
+
+var cacheFn CacheFn = NewCachedTumblr
 
 var cache *lru.Cache
 var avatarCache *lru.Cache
@@ -69,8 +75,21 @@ var httpClient = &http.Client{
 }
 
 func main() {
+	flag.StringVar(&config.Addr, "addr", "localhost:5555", "Address to listen on")
 	flag.StringVar(&config.DefaultTumblr, "default", "nettleforest", "Default tumblr to view")
+	flag.StringVar(&config.DatabasePath, "db", "", "Database path to use")
 	flag.Parse()
+
+	if config.DatabasePath != "" {
+		db, err := InitDatabase(config.DatabasePath)
+		if err != nil {
+			log.Fatalf("setup database: %s", err)
+		}
+
+		cacheFn = func(name string, uncachedFn FeedFn) (Tumblr, error) {
+			return NewDatabaseCached(db, name, uncachedFn)
+		}
+	}
 
 	var err error
 	cache, err = lru.New(100)
@@ -196,9 +215,8 @@ self.addEventListener('install', function(e) {
 
 	http.Handle("/", router)
 
-	addr := "localhost:5555"
-	log.Printf("Listening on http://%s", addr)
-	log.Fatal(http.ListenAndServe(addr, nil))
+	log.Printf("Listening on http://%s", config.Addr)
+	log.Fatal(http.ListenAndServe(config.Addr, nil))
 }
 
 func HandleAvatar(w http.ResponseWriter, req *http.Request) {
@@ -310,7 +328,7 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 		wg.Add(len(tumbls))
 		for i := range tumbls {
 			go func(i int) {
-				tumblrs[i], err = NewCachedFeed(tumbls[i])
+				tumblrs[i], err = NewCachedFeed(tumbls[i], cacheFn)
 				if err != nil {
 					err = fmt.Errorf("%s: %w", tumbls[i], err)
 				}
@@ -327,7 +345,7 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 		}
 		tumblr = MergeTumblrs(successfulTumblrs...)
 	} else {
-		tumblr, err = NewCachedFeed(tumbl)
+		tumblr, err = NewCachedFeed(tumbl, cacheFn)
 	}
 	if err != nil {
 		log.Println("open:", err)
@@ -336,7 +354,12 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 	}
-	defer tumblr.Close()
+	defer func() {
+		err := tumblr.Close()
+		if err != nil {
+			log.Printf("Error: closing %s: %s", tumbl, err)
+		}
+	}()
 	openTime := time.Since(start)
 
 	postCount := 0
@@ -700,20 +723,23 @@ type Tumblr interface {
 	Close() error
 }
 
-func NewCachedFeed(name string) (Tumblr, error) {
+type FeedFn func(name string) (Tumblr, error)
+type CacheFn func(name string, uncachedFn FeedFn) (Tumblr, error)
+
+func NewCachedFeed(name string, cacheFn CacheFn) (Tumblr, error) {
 	switch {
 	case strings.HasSuffix(name, "@twitter"):
-		return NewCachedTumblr(name, NewNitter)
+		return cacheFn(name, NewNitter)
 	case strings.HasSuffix(name, "@instagram"):
-		return NewCachedTumblr(name, NewBibliogram)
+		return cacheFn(name, NewBibliogram)
 	case strings.Contains(name, "@") || strings.Contains(name, "."):
-		return NewCachedTumblr(name, NewRSS)
+		return cacheFn(name, NewRSS)
 	default:
-		return NewCachedTumblr(name, NewTumblrRSS)
+		return cacheFn(name, NewTumblrRSS)
 	}
 }
 
-func NewCachedTumblr(name string, uncachedFn func(name string) (Tumblr, error)) (Tumblr, error) {
+func NewCachedTumblr(name string, uncachedFn FeedFn) (Tumblr, error) {
 	cached, isCached := cache.Get(name)
 	if isCached && time.Since(cached.(*cachedTumblr).cachedAt) < CacheTime {
 		tumblr := *cached.(*cachedTumblr)

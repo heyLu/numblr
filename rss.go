@@ -156,6 +156,7 @@ func (rss *rss) Next() (*Post, error) {
 		}
 	}
 	return &Post{
+		ID:              item.GUID,
 		Author:          rss.name,
 		AvatarURL:       avatarURL,
 		URL:             item.Link,

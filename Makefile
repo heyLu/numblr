@@ -1,11 +1,11 @@
 .PHONY: lighthouse.html
 
-numbl: favicon_png.go *.go
-	CGO_ENABLED=0 go build .
+numbl: favicon_png.go *.go Makefile
+	go build .
 	strip numbl
 	upx numbl
 
-favicon_png.go: favicon.png
+favicon_png.go: favicon.png embed.rb Makefile
 	./embed.rb favicon.png FaviconPNGBytes favicon_png.go
 
 favicon.png: favicon.svg
@@ -13,6 +13,9 @@ favicon.png: favicon.svg
 
 reload_run:
 	git ls-files --cached --others | grep -v '_test.go$$' | grep '.go$$' | entr -c -r go run .
+
+reload_run_db:
+	git ls-files --cached --others | grep -v '_test.go$$' | grep '.go$$' | entr -c -r go run . -addr localhost:5556 -db cache.db
 
 reload_test:
 	git ls-files --cached --others | grep -v '_test.go$$' | grep '.go$$' | entr -c -r go test .
