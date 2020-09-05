@@ -440,7 +440,10 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 	fmt.Fprintln(w, `<section id="lists">
 <h1>Lists</h1>
 
-<ul>`)
+<ul>
+
+<li><a href="/">everything</a></li>`)
+
 	for _, cookie := range req.Cookies() {
 		if strings.HasPrefix(cookie.Name, CookieName+"-list-") {
 			listName := cookie.Name[len(CookieName+"-list-"):]
