@@ -43,6 +43,7 @@ func (p Post) IsReblog() bool {
 
 var imgRE = regexp.MustCompile(`<img `)
 var widthHeightRE = regexp.MustCompile(` (width|height|style)="[^"]+"`)
+var blankLinksRE = regexp.MustCompile(` target="_blank"`)
 var linkRE = regexp.MustCompile(`<a `)
 var tumblrLinksRE = regexp.MustCompile(`https?://([^.]+).tumblr.com([^" ]+)?`)
 var videoRE = regexp.MustCompile(`<video `)
@@ -379,6 +380,7 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 			return `<img `
 		})
 		postHTML = widthHeightRE.ReplaceAllString(postHTML, ` `)
+		postHTML = blankLinksRE.ReplaceAllString(postHTML, ` `)
 		postHTML = linkRE.ReplaceAllStringFunc(postHTML, func(repl string) string {
 			return `<a rel="noreferrer" `
 		})
