@@ -334,7 +334,7 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 	tumbl := tumblsFromRequest(req)
 	tumbls := strings.Split(tumbl, ",")
 
-	search := req.URL.Query().Get("search")
+	search := parseSearch(req)
 
 	limit := 25
 	limitParam := req.URL.Query().Get("limit")
@@ -383,7 +383,7 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 `, tumbl, title, modeCSS, title)
 
 	fmt.Fprintf(w, `<form method="GET" action=%q><input aria-label="visit feed" name="feed" type="search" value="" placeholder="feed" /></form>`, req.URL.Path)
-	fmt.Fprintf(w, `<form method="GET" action=%q><input aria-label="search posts" name="search" type="search" value=%q placeholder="noreblog #art ..." /></form>`, req.URL.Path, search)
+	fmt.Fprintf(w, `<form method="GET" action=%q><input aria-label="search posts" name="search" type="search" value=%q placeholder="noreblog #art ..." /></form>`, req.URL.Path, req.URL.Query().Get("search"))
 
 	var tumblr Tumblr
 	var err error
@@ -450,12 +450,13 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 	imageCount := 0
 	nextPost()
 	for err == nil {
+		if !search.Matches(post) {
+			nextPost()
+			continue
+		}
+
 		classes := make([]string, 0, 1)
 		if post.IsReblog() {
-			if strings.Contains(search, "no-reblog") {
-				nextPost()
-				continue
-			}
 			classes = append(classes, "reblog")
 		}
 
@@ -640,6 +641,118 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 
 	fmt.Fprintln(w, `</body>
 </html>`)
+}
+
+type Search struct {
+	IsActive bool
+
+	NoReblogs    bool
+	Terms        []string
+	Tags         []string
+	ExcludeTerms []string
+	ExcludeTags  []string
+}
+
+func (s *Search) Matches(p *Post) bool {
+	if !s.IsActive {
+		return true
+	}
+
+	if s.NoReblogs && p.IsReblog() {
+		return false
+	}
+
+	for _, tag := range p.Tags {
+		for _, exclude := range s.ExcludeTags {
+			if tag == exclude {
+				return false
+			}
+		}
+	}
+
+	// must match all tags
+	for _, tag := range s.Tags {
+		if !contains(p.Tags, tag) {
+			return false
+		}
+	}
+
+	for _, term := range s.Terms {
+		if !strings.Contains(strings.ToLower(p.Title), term) && !strings.Contains(strings.ToLower(p.DescriptionHTML), term) {
+			return false
+		}
+	}
+
+	for _, term := range s.ExcludeTerms {
+		if strings.Contains(strings.ToLower(p.Title), term) || strings.Contains(strings.ToLower(p.DescriptionHTML), term) {
+			return false
+		}
+	}
+
+	return true
+}
+
+func contains(xs []string, contain string) bool {
+	for _, x := range xs {
+		if strings.ToLower(x) == contain {
+			return true
+		}
+	}
+	return false
+}
+
+func parseSearch(req *http.Request) Search {
+	searchTerms := strings.Fields(req.URL.Query().Get("search"))
+	if len(searchTerms) == 0 {
+		return Search{}
+	}
+
+	search := Search{
+		IsActive:     true,
+		Terms:        make([]string, 0, 1),
+		Tags:         make([]string, 0, 1),
+		ExcludeTags:  make([]string, 0, 1),
+		ExcludeTerms: make([]string, 0, 1),
+	}
+
+	for _, searchTerm := range searchTerms {
+		if searchTerm == "noreblog" {
+			search.NoReblogs = true
+			continue
+		}
+
+		exclude := false
+		if searchTerm[0] == '-' {
+			exclude = true
+			searchTerm = searchTerm[1:]
+		}
+
+		tag := false
+		if searchTerm[0] == '#' {
+			tag = true
+			searchTerm = searchTerm[1:]
+		}
+
+		unescaped, err := url.QueryUnescape(searchTerm)
+		if err == nil {
+			searchTerm = unescaped
+		}
+
+		searchTerm = strings.ToLower(searchTerm)
+
+		switch {
+		case exclude && tag:
+			search.ExcludeTags = append(search.ExcludeTags, searchTerm)
+		case tag:
+			search.Tags = append(search.Tags, searchTerm)
+		case exclude:
+			search.ExcludeTerms = append(search.ExcludeTerms, searchTerm)
+		default:
+			search.Terms = append(search.Terms, searchTerm)
+		}
+	}
+
+	return search
 }
 
 func tumblsFromRequest(req *http.Request) string {
