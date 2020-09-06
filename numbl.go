@@ -567,7 +567,11 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
   window.addEventListener('touchmove', e => {
     const y = e.touches[0].pageY;
     if (document.scrollingElement.scrollTop === 0 && y > startY) {
-      window.location.reload();
+      let url = new URL(window.location);
+      if (url.searchParams.has("before")) {
+        url.searchParams.delete("before");
+      }
+      window.location = url.href;
     }
   }, {passive: true});
 
