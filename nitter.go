@@ -52,6 +52,7 @@ func (nr *nitterRSS) Next() (*Post, error) {
 		return nr.rss.Next()
 	}
 
+	post.Source = "twitter"
 	post.Author = nr.name
 
 	return post, nil

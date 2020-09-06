@@ -22,7 +22,7 @@ func InitDatabase(dbPath string) (*sql.DB, error) {
 		return nil, fmt.Errorf("setup feed_infos table: %w", err)
 	}
 
-	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS posts ( name TEXT, id TEXT, author TEXT, avatar_url TEXT, url TEXT, title TEXT, description_html TEXT, tags TEXT, date_string TEXT, date DATE, PRIMARY KEY (name, id))`)
+	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS posts ( source TEXT, name TEXT, id TEXT, author TEXT, avatar_url TEXT, url TEXT, title TEXT, description_html TEXT, tags TEXT, date_string TEXT, date DATE, PRIMARY KEY (source, name, id))`)
 	if err != nil {
 		return nil, fmt.Errorf("setup posts table: %w", err)
 	}
@@ -41,7 +41,7 @@ func NewDatabaseCached(db *sql.DB, name string, uncachedFn FeedFn) (Tumblr, erro
 
 	isCached := err != sql.ErrNoRows
 	if isCached && time.Since(cachedAt) < CacheTime {
-		rows, err := db.Query("SELECT author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? ORDER BY date DESC LIMIT 20", name)
+		rows, err := db.Query("SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? ORDER BY date DESC LIMIT 20", name)
 		if err != nil {
 			return nil, fmt.Errorf("querying posts: %w", err)
 		}
@@ -113,8 +113,8 @@ func (ct *databaseCaching) Save() error {
 			return fmt.Errorf("encode tags: %w", err)
 		}
 
-		stmt += "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?), "
-		vals = append(vals, ct.uncached.Name(), post.ID, post.Author, post.AvatarURL, post.URL, post.Title, post.DescriptionHTML, tagsJSON, post.DateString, post.Date)
+		stmt += "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?), "
+		vals = append(vals, post.Source, ct.uncached.Name(), post.ID, post.Author, post.AvatarURL, post.URL, post.Title, post.DescriptionHTML, tagsJSON, post.DateString, post.Date)
 	}
 
 	// trim last comma and space
@@ -175,7 +175,7 @@ func (dc *databaseCached) Next() (*Post, error) {
 
 	var post Post
 	var tags []byte
-	err := dc.rows.Scan(&post.Author, &post.AvatarURL, &post.URL, &post.Title, &post.DescriptionHTML, &tags, &post.DateString, &post.Date)
+	err := dc.rows.Scan(&post.Source, &post.ID, &post.Author, &post.AvatarURL, &post.URL, &post.Title, &post.DescriptionHTML, &tags, &post.DateString, &post.Date)
 	if err != nil {
 		return nil, fmt.Errorf("scan: %w", err)
 	}

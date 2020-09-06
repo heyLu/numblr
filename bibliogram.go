@@ -45,3 +45,13 @@ type bibliogramRSS struct {
 func (br bibliogramRSS) URL() string {
 	return fmt.Sprintf("https://bibliogram.snopyta.org/u/%s/rss.xml", br.name)
 }
+
+func (br bibliogramRSS) Next() (*Post, error) {
+	post, err := br.tumblrRSS.Next()
+	if err != nil {
+		return nil, err
+	}
+
+	post.Source = "instagram"
+	return post, err
+}

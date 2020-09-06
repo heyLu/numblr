@@ -25,6 +25,7 @@ import (
 const TumblrDate = "Mon, 2 Jan 2006 15:04:05 -0700"
 
 type Post struct {
+	Source          string
 	ID              string `xml:"guid"`
 	Author          string
 	AvatarURL       string
@@ -857,11 +858,22 @@ func (tr *tumblrRSS) URL() string {
 	return fmt.Sprintf("https://%s.tumblr.com/rss", tr.name)
 }
 
+var tumblrPostURLRE = regexp.MustCompile(`https?://(\w+).tumblr.com/post/(\d+)(/(.*))?`)
+
 func (tr *tumblrRSS) Next() (*Post, error) {
 	var post Post
 	err := tr.dec.Decode(&post)
 	if err != nil {
 		return nil, fmt.Errorf("decode: %w", err)
+	}
+
+	post.Source = "tumblr"
+
+	if tumblrPostURLRE.MatchString(post.ID) {
+		parts := tumblrPostURLRE.FindStringSubmatch(post.ID)
+		if len(parts) >= 3 {
+			post.ID = parts[2]
+		}
 	}
 
 	post.Author = tr.name
