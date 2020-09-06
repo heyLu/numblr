@@ -49,6 +49,7 @@ var widthHeightRE = regexp.MustCompile(` (width|height|style)="[^"]+"`)
 var blankLinksRE = regexp.MustCompile(` target="_blank"`)
 var linkRE = regexp.MustCompile(`<a `)
 var tumblrLinksRE = regexp.MustCompile(`https?://([^.]+).tumblr.com([^" ]+)?`)
+var tumblrAccountLinkRE = regexp.MustCompile(`<a ([^>]*)href="[^"]+"([^>]*)>@(\w+)</a>`)
 var videoRE = regexp.MustCompile(`<video `)
 var autoplayRE = regexp.MustCompile(` autoplay="autoplay"`)
 
@@ -456,6 +457,15 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 			u.Scheme = ""
 			u.Path = path.Join(tumblrName, u.Path)
 			return u.String()
+		})
+		postHTML = tumblrAccountLinkRE.ReplaceAllStringFunc(postHTML, func(repl string) string {
+			parts := tumblrAccountLinkRE.FindStringSubmatch(repl)
+			if len(parts) != 4 {
+				log.Printf("Error: invalid tumblr account link: %s", repl)
+				return repl
+			}
+
+			return fmt.Sprintf(`<a %shref=%q%s>%s</a>`, parts[1], "/"+parts[3], parts[2], "@"+parts[3])
 		})
 		postHTML = videoRE.ReplaceAllStringFunc(postHTML, func(repl string) string {
 			return `<video preload="metadata" controls="" `
