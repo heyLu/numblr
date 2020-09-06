@@ -48,8 +48,9 @@ var imgRE = regexp.MustCompile(`<img `)
 var widthHeightRE = regexp.MustCompile(` (width|height|style)="[^"]+"`)
 var blankLinksRE = regexp.MustCompile(` target="_blank"`)
 var linkRE = regexp.MustCompile(`<a `)
+var tumblrReblogLinkRE = regexp.MustCompile(`<a ([^>]*)href="(https?://[^.]+\.tumblr.com([^" ]+)?)"([^>]*)>(\w+)</a>:`) // <a>account</a>:
+var tumblrAccountLinkRE = regexp.MustCompile(`<a ([^>]*)href="[^"]+"([^>]*)>@(\w+)</a>`)                                // @<account>
 var tumblrLinksRE = regexp.MustCompile(`https?://([^.]+).tumblr.com([^" ]+)?`)
-var tumblrAccountLinkRE = regexp.MustCompile(`<a ([^>]*)href="[^"]+"([^>]*)>@(\w+)</a>`)
 var videoRE = regexp.MustCompile(`<video `)
 var autoplayRE = regexp.MustCompile(` autoplay="autoplay"`)
 
@@ -492,6 +493,38 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 		postHTML = linkRE.ReplaceAllStringFunc(postHTML, func(repl string) string {
 			return `<a rel="noreferrer" `
 		})
+		postHTML = tumblrReblogLinkRE.ReplaceAllStringFunc(postHTML, func(repl string) string {
+			parts := tumblrReblogLinkRE.FindStringSubmatch(repl)
+			if len(parts) != 6 {
+				log.Printf("Error: invalid tumblr reblog link: %s", repl)
+				return repl
+			}
+
+			u, err := url.Parse(parts[2])
+			if err != nil {
+				log.Printf("could not parse url: %s", err)
+				return repl
+			}
+
+			tumblrName := u.Host[:strings.Index(u.Host, ".")]
+			u.Host = ""
+			u.Scheme = ""
+			u.Path = path.Join("/", tumblrName, u.Path)
+
+			reblogLink := u.String()
+			tumblrLink := "/" + tumblrName
+
+			return fmt.Sprintf(`<a href=%q>%s</a> (<a %shref=%q%s>post</a>):`, tumblrLink, tumblrName, parts[1], reblogLink, parts[4])
+		})
+		postHTML = tumblrAccountLinkRE.ReplaceAllStringFunc(postHTML, func(repl string) string {
+			parts := tumblrAccountLinkRE.FindStringSubmatch(repl)
+			if len(parts) != 4 {
+				log.Printf("Error: invalid tumblr account link: %s", repl)
+				return repl
+			}
+
+			return fmt.Sprintf(`<a %shref=%q%s>%s</a>`, parts[1], "/"+parts[3], parts[2], "@"+parts[3])
+		})
 		postHTML = tumblrLinksRE.ReplaceAllStringFunc(postHTML, func(repl string) string {
 			u, err := url.Parse(repl)
 			if err != nil {
@@ -504,15 +537,6 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 			u.Scheme = ""
 			u.Path = path.Join(tumblrName, u.Path)
 			return u.String()
-		})
-		postHTML = tumblrAccountLinkRE.ReplaceAllStringFunc(postHTML, func(repl string) string {
-			parts := tumblrAccountLinkRE.FindStringSubmatch(repl)
-			if len(parts) != 4 {
-				log.Printf("Error: invalid tumblr account link: %s", repl)
-				return repl
-			}
-
-			return fmt.Sprintf(`<a %shref=%q%s>%s</a>`, parts[1], "/"+parts[3], parts[2], "@"+parts[3])
 		})
 		postHTML = videoRE.ReplaceAllStringFunc(postHTML, func(repl string) string {
 			return `<video preload="metadata" controls="" `
