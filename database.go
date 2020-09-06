@@ -30,6 +30,31 @@ func InitDatabase(dbPath string) (*sql.DB, error) {
 	return db, err
 }
 
+func ListFeedsOlderThan(db *sql.DB, olderThan time.Time) ([]string, error) {
+	rows, err := db.Query(`SELECT name FROM feed_infos WHERE ? > cached_at`, olderThan)
+	if err != nil {
+		return nil, fmt.Errorf("select: %w", err)
+	}
+	defer rows.Close()
+
+	feeds := make([]string, 0, 10)
+	for rows.Next() {
+		var feed string
+		err := rows.Scan(&feed)
+		if err != nil {
+			return nil, fmt.Errorf("scan: %w", err)
+		}
+
+		feeds = append(feeds, feed)
+	}
+
+	if rows.Err() != nil {
+		return nil, fmt.Errorf("after scan: %w", err)
+	}
+
+	return feeds, nil
+}
+
 func NewDatabaseCached(db *sql.DB, name string, uncachedFn FeedFn) (Tumblr, error) {
 	row := db.QueryRow("SELECT cached_at, url FROM feed_infos WHERE name = ?", name)
 	var cachedAt time.Time

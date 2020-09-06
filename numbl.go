@@ -95,6 +95,52 @@ func main() {
 		cacheFn = func(name string, uncachedFn FeedFn) (Tumblr, error) {
 			return NewDatabaseCached(db, name, uncachedFn)
 		}
+
+		go func() {
+			refreshFn := func() {
+				feeds, err := ListFeedsOlderThan(db, time.Now().Add(-CacheTime))
+				if err != nil {
+					log.Printf("Error: listing feeds in background: %s", err)
+					return
+				}
+
+				for _, feedName := range feeds {
+					func(feedName string) {
+						feed, err := NewCachedFeed(feedName, cacheFn)
+						if err != nil {
+							log.Printf("Error: background refresh: opening feed: %s", err)
+							return
+						}
+						defer func() {
+							err := feed.Close()
+							if err != nil {
+								log.Printf("Error: background refresh: closing feed: %s", err)
+							}
+						}()
+
+						_, err = feed.Next()
+						for err == nil {
+							_, err = feed.Next()
+						}
+
+						if err != nil && !errors.Is(err, io.EOF) {
+							log.Printf("Error: background refresh: iterating feed: %s", err)
+							return
+						}
+					}(feedName)
+				}
+
+				if len(feeds) > 0 {
+					log.Printf("Refreshed %d feeds", len(feeds))
+				}
+			}
+
+			for {
+				go refreshFn()
+
+				time.Sleep(1 * time.Minute)
+			}
+		}()
 	}
 
 	var err error
