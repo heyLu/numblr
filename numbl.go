@@ -320,7 +320,7 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 	<meta name="viewport" content="width=device-width,minimum-scale=1,initial-scale=1" />
 	<meta name="description" content="Mirror of %s tumblrs" />
 	<title>%s</title>
-	<style>#top, #bottom { float: right; text-decoration: none; }h1 { word-break: break-all; }blockquote, figure { margin: 0; }blockquote:not(:last-child) { border-bottom: 1px solid #ddd; } blockquote > blockquote:nth-child(1) { border-bottom: 0; }body { font-family: sans-serif; }article{ border-bottom: 1px solid black; padding: 1em 0; }.tags { list-style: none; padding: 0; color: #666; }.tags > li { display: inline }img, video, iframe { max-width: 95vw; }@media (min-width: 60em) { body { margin-left: 15vw; max-width: 60em; } img, video { max-height: 20vh; } img:hover, video:hover { max-height: 100%%; }}.avatar{height: 1em;}a.author,a.author:visited{color: #000;}.next-page { display: flex; justify-content: center; padding: 1em; }%s</style>
+	<style>.jumper { float: right; text-decoration: none; }.jump-to-top { position: sticky; bottom: 1em; }h1 { word-break: break-all; }blockquote, figure { margin: 0; }blockquote:not(:last-child) { border-bottom: 1px solid #ddd; } blockquote > blockquote:nth-child(1) { border-bottom: 0; }body { font-family: sans-serif; }article{ border-bottom: 1px solid black; padding: 1em 0; }.tags { list-style: none; padding: 0; color: #666; }.tags > li { display: inline }img, video, iframe { max-width: 95vw; }@media (min-width: 60em) { body { margin-left: 15vw; max-width: 60em; } img, video { max-height: 20vh; } img:hover, video:hover { max-height: 100%%; }}.avatar{height: 1em;}a.author,a.author:visited{color: #000;}.next-page { display: flex; justify-content: center; padding: 1em; }%s</style>
 	<link rel="preconnect" href="https://64.media.tumblr.com/" />
 	<link rel="manifest" href="/manifest.webmanifest" />
 	<meta name="theme_color" content="#222222" />
@@ -329,7 +329,7 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 
 <body>
 
-<a id="top" href="#bottom">⭣</a>
+<a id="top" class="jumper" href="#bottom">⭣</a>
 
 <h1>%s</h1>
 
@@ -483,7 +483,8 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 		nextPost()
 	}
 
-	fmt.Fprintln(w, `<a id="bottom" href="#top">⭡</a>`)
+	fmt.Fprintln(w, `<span id="bottom"></span>
+<a id="link-top" class="jumper" href="#top">⭡</a>`)
 
 	if err == nil && lastPost != nil {
 		url := req.URL
@@ -532,6 +533,19 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 	}
 
 	fmt.Fprintln(w, `<script>
+  let lastScrollTop = window.pageYOffset || document.documentElement.scrollTop;;
+
+  var toTopEl = document.querySelector("#link-top");
+  window.addEventListener("scroll", function() {
+    let st = window.pageYOffset || document.documentElement.scrollTop;
+    if (st > lastScrollTop){
+      toTopEl.classList.remove("jump-to-top");
+    } else {
+      toTopEl.classList.add("jump-to-top");
+    }
+    lastScrollTop = st <= 0 ? 0 : st;
+  }, false);
+
   function reloadSpinner() {
     let reloadStyleEl = document.createElement("style");
     reloadStyleEl.textContent = "#reload { position: fixed; top: 1ex; left: 50vw; animation: reload 3s infinite; } @keyframes reload { 0% { color: black; } 12.5% { color: violet; } 25% { color: blue; } 37.5% { color: green; } 50% { color: yellow; } 62.5% { color: orange; } 75% { color: red; } 87.5% { color: brown; } 100% { color: black; } }";
