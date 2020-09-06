@@ -59,6 +59,8 @@ var config struct {
 	DatabasePath string
 
 	DefaultTumblr string
+
+	AppDisplayMode string
 }
 
 const CacheTime = 10 * time.Minute
@@ -78,8 +80,9 @@ var httpClient = &http.Client{
 
 func main() {
 	flag.StringVar(&config.Addr, "addr", "localhost:5555", "Address to listen on")
-	flag.StringVar(&config.DefaultTumblr, "default", "nettleforest", "Default tumblr to view")
 	flag.StringVar(&config.DatabasePath, "db", "", "Database path to use")
+	flag.StringVar(&config.DefaultTumblr, "default", "nettleforest", "Default tumblr to view")
+	flag.StringVar(&config.AppDisplayMode, "app-display", "browser", "Display mode to use when installed as an app")
 	flag.Parse()
 
 	if config.DatabasePath != "" {
@@ -120,7 +123,7 @@ Disallow: /`)
 	router.HandleFunc("/manifest.webmanifest", func(w http.ResponseWriter, req *http.Request) {
 		w.Header().Set("Content-Type", "application/manifest+json")
 
-		fmt.Fprintln(w, `{
+		fmt.Fprintf(w, `{
   "name": "Numblr",
   "description": "A bare-bones mirror for tumblrs.",
   "short_name": "numblr",
@@ -132,11 +135,11 @@ Disallow: /`)
 	 "purpose": "any maskable",
 	 "type": "image/png"
   }],
-  "display": "standalone",
+  "display": %q,
   "orientation": "portrait",
   "background_color": "#222222",
   "theme_color": "#222222"
-}`)
+}`, config.AppDisplayMode)
 	})
 	// required to be registered as a progressive web app (?)
 	router.HandleFunc("/service-worker.js", func(w http.ResponseWriter, req *http.Request) {
