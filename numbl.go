@@ -570,6 +570,7 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
       if (url.searchParams.has("before")) {
         url.searchParams.delete("before");
       }
+      url.hash = "";
       window.location = url.href;
     }
   }, {passive: true});
