@@ -94,20 +94,6 @@ func (ct *databaseCaching) Close() error {
 }
 
 func (ct *databaseCaching) Save() error {
-	res, err := ct.db.Exec(`INSERT OR REPLACE INTO feed_infos VALUES (?, ?, ?)`, ct.uncached.Name(), ct.uncached.URL(), ct.cachedAt)
-	if err != nil {
-		return fmt.Errorf("update feed_infos: %w", err)
-	}
-
-	count, err := res.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("row count: %w", err)
-	}
-
-	if count != 1 {
-		return fmt.Errorf("expected 1 updated row, but was %d", count)
-	}
-
 	stmt := `INSERT OR REPLACE INTO posts VALUES `
 	vals := make([]interface{}, 0, len(ct.posts)*10)
 	for _, post := range ct.posts {
@@ -117,6 +103,9 @@ func (ct *databaseCaching) Save() error {
 
 		if post.ID == "" {
 			return fmt.Errorf("empty post id: %#v", post)
+		}
+		if post.Source == "" {
+			return fmt.Errorf("empty post source: %#v", post)
 		}
 
 		tagsJSON, err := json.Marshal(post.Tags)
@@ -131,16 +120,31 @@ func (ct *databaseCaching) Save() error {
 	// trim last comma and space
 	stmt = stmt[:len(stmt)-2]
 
-	res, err = ct.db.Exec(stmt, vals...)
+	res, err := ct.db.Exec(stmt, vals...)
 	if err != nil {
 		return fmt.Errorf("update posts: %w", err)
 	}
 
-	count, err = res.RowsAffected()
+	postUpdateCount, err := res.RowsAffected()
 	if err != nil {
 		return fmt.Errorf("row count: %w", err)
 	}
-	log.Printf("updating %s: %d posts updated, %d rows changed\n", ct.uncached.Name(), len(ct.posts), count)
+
+	res, err = ct.db.Exec(`INSERT OR REPLACE INTO feed_infos VALUES (?, ?, ?)`, ct.uncached.Name(), ct.uncached.URL(), ct.cachedAt)
+	if err != nil {
+		return fmt.Errorf("update feed_infos: %w", err)
+	}
+
+	count, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("row count: %w", err)
+	}
+
+	if count != 1 {
+		return fmt.Errorf("expected 1 updated row, but was %d", count)
+	}
+
+	log.Printf("updating %s: %d posts updated, %d rows changed\n", ct.uncached.Name(), len(ct.posts), postUpdateCount)
 
 	return nil
 }
