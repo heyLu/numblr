@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"path"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -285,6 +286,17 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 
 	search := req.URL.Query().Get("search")
 
+	limit := 25
+	limitParam := req.URL.Query().Get("limit")
+	if limitParam != "" {
+		l, err := strconv.Atoi(limitParam)
+		if err != nil {
+			log.Printf("Error: parsing limit: %s", err)
+		} else {
+			limit = l
+		}
+	}
+
 	w.Header().Set("Content-Type", "text/html")
 
 	nightModeCSS := `body { color: #fff; background-color: #222; }.tags { color: #b7b7b7 }a { color: pink; }a:visited { color: #a67070; }article{ border-bottom: 1px solid #666; }blockquote:not(:last-child) { border-bottom: 1px solid #333; }a.author,a.author:visited{color: #fff;}`
@@ -368,8 +380,21 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 
 	postCount := 0
 	var post *Post
+	var lastPost *Post
 	nextPost := func() {
+		lastPost = post
 		post, err = tumblr.Next()
+	}
+
+	beforeParam := req.URL.Query().Get("before")
+	if beforeParam != "" {
+		nextPost()
+		for err == nil {
+			if post.ID == beforeParam {
+				break
+			}
+			nextPost()
+		}
 	}
 
 	imageCount := 0
@@ -383,7 +408,12 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 			}
 			classes = append(classes, "reblog")
 		}
+
+		if postCount >= limit {
+			break
+		}
 		postCount++
+
 		fmt.Fprintf(w, `<article class=%q>`, strings.Join(classes, " "))
 		avatarURL := post.AvatarURL
 		if avatarURL == "" {
@@ -451,6 +481,15 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 	}
 
 	fmt.Fprintln(w, `<a id="bottom" href="#top">⭡</a>`)
+
+	if err == nil && lastPost != nil {
+		url := req.URL
+		query := url.Query()
+		query.Set("before", lastPost.ID)
+		url.RawQuery = query.Encode()
+		log.Println(lastPost)
+		fmt.Fprintf(w, `<div class="next-page"><a href="%s">next page</a></div>`, url)
+	}
 
 	fmt.Fprintf(w, `<form method="POST" action="/settings">
 
