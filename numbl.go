@@ -491,7 +491,6 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 		query := url.Query()
 		query.Set("before", lastPost.ID)
 		url.RawQuery = query.Encode()
-		log.Println(lastPost)
 		fmt.Fprintf(w, `<div class="next-page"><a href="%s">next page</a></div>`, url)
 	}
 
