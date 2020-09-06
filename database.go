@@ -12,7 +12,7 @@ import (
 )
 
 func InitDatabase(dbPath string) (*sql.DB, error) {
-	db, err := sql.Open("sqlite3", "file:"+dbPath)
+	db, err := sql.Open("sqlite3", "file:"+dbPath+"?cache=shared&_busy_timeout=50")
 	if err != nil {
 		return nil, fmt.Errorf("open: %w", err)
 	}
@@ -49,7 +49,7 @@ func ListFeedsOlderThan(db *sql.DB, olderThan time.Time) ([]string, error) {
 	}
 
 	if rows.Err() != nil {
-		return nil, fmt.Errorf("after scan: %w", err)
+		return nil, fmt.Errorf("after scan: %w", rows.Err())
 	}
 
 	return feeds, nil
