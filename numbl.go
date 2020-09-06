@@ -331,9 +331,10 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 		wg.Add(len(tumbls))
 		for i := range tumbls {
 			go func(i int) {
-				tumblrs[i], err = NewCachedFeed(tumbls[i], cacheFn)
-				if err != nil {
-					err = fmt.Errorf("%s: %w", tumbls[i], err)
+				var openErr error
+				tumblrs[i], openErr = NewCachedFeed(tumbls[i], cacheFn)
+				if openErr != nil {
+					err = fmt.Errorf("%s: %w", tumbls[i], openErr)
 				}
 				wg.Done()
 			}(i)
