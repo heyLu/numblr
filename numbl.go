@@ -870,6 +870,39 @@ func HandlePost(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	var cleanup func(*html.Node)
+	cleanup = func(node *html.Node) {
+		for child := node.FirstChild; child != nil; child = child.NextSibling {
+			if child.Type == html.ElementNode {
+				switch child.Data {
+				case "section":
+					if hasAttribute(child, "class", "related-posts-wrapper") {
+						node.RemoveChild(child)
+						continue
+					}
+					if hasAttribute(child, "class", "post-controls") {
+						node.RemoveChild(child)
+						continue
+					}
+				case "iframe", "script", "style":
+					node.RemoveChild(child)
+					continue
+				default:
+					attrs := make([]html.Attribute, 0, len(child.Attr))
+					for _, attr := range child.Attr {
+						switch attr.Key {
+						case "src", "href", "rel", "title", "alt", "class":
+							attrs = append(attrs, attr)
+						}
+					}
+					child.Attr = attrs
+				}
+			}
+
+			cleanup(child)
+		}
+	}
+
 	var f func(*html.Node)
 	f = func(node *html.Node) {
 		if node.Type == html.ElementNode {
@@ -878,6 +911,8 @@ func HandlePost(w http.ResponseWriter, req *http.Request) {
 				if hasAttribute(node, "class", "app-nag") {
 					return
 				}
+
+				cleanup(node)
 
 				err := html.Render(w, node)
 				if err != nil {
