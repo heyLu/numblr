@@ -350,7 +350,7 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 
 	w.Header().Set("Content-Type", `text/html; charset="utf-8"`)
 
-	nightModeCSS := `body { color: #fff; background-color: #222; }.tags { color: #b7b7b7 }a { color: pink; }a:visited { color: #a67070; }article{ border-bottom: 1px solid #666; }blockquote:not(:last-child) { border-bottom: 1px solid #333; }a.author,a.author:visited{color: #fff;}`
+	nightModeCSS := `body { color: #fff; background-color: #222; }.tags { color: #b7b7b7 }a { color: pink; }a:visited { color: #a67070; }article{ border-bottom: 1px solid #666; }blockquote:not(:last-child) { border-bottom: 1px solid #333; }a.author,a.author:visited,a.tumblr-link,a.tumblr-link:visited{color: #fff;}`
 	modeCSS := `@media (prefers-color-scheme: dark) {` + nightModeCSS + `}`
 	if _, ok := req.URL.Query()["night-mode"]; ok {
 		modeCSS = nightModeCSS
@@ -368,7 +368,7 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 	<meta name="viewport" content="width=device-width,minimum-scale=1,initial-scale=1" />
 	<meta name="description" content="Mirror of %s tumblrs" />
 	<title>%s</title>
-	<style>.jumper { font-size: 2em; float: right; text-decoration: none; }.jump-to-top { position: sticky; bottom: 0.25em; }h1 { word-break: break-all; }blockquote, figure { margin: 0; }blockquote:not(:last-child) { border-bottom: 1px solid #ddd; } blockquote > blockquote:nth-child(1) { border-bottom: 0; }body { font-family: sans-serif; }article{ border-bottom: 1px solid black; padding: 1em 0; }.tags { list-style: none; padding: 0; color: #666; }.tags > li { display: inline }img, video, iframe { max-width: 95vw; }@media (min-width: 60em) { body { margin-left: 15vw; max-width: 60em; } img, video { max-height: 20vh; } img:hover, video:hover { max-height: 100%%; }}.avatar{height: 1em;vertical-align: middle;}a.author,a.author:visited{color: #000; font-weight: bold;}.next-page { display: flex; justify-content: center; padding: 1em; }%s</style>
+	<style>.jumper { font-size: 2em; float: right; text-decoration: none; }.jump-to-top { position: sticky; bottom: 0.25em; }h1 { word-break: break-all; }blockquote, figure { margin: 0; }blockquote:not(:last-child) { border-bottom: 1px solid #ddd; } blockquote > blockquote:nth-child(1) { border-bottom: 0; }body { font-family: sans-serif; }article{ border-bottom: 1px solid black; padding: 1em 0; }.tags { list-style: none; padding: 0; color: #666; }.tags > li { display: inline }img, video, iframe { max-width: 95vw; }@media (min-width: 60em) { body { margin-left: 15vw; max-width: 60em; } img, video { max-height: 20vh; } img:hover, video:hover { max-height: 100%%; }}.avatar{height: 1em;vertical-align: middle;}a.author,a.author:visited,a.tumblr-link,a.tumblr-link:visited{color: #000; font-weight: bold;}a.tumblr-link{padding: 0.5em; text-decoration: none; font-size: larger; vertical-align: middle;}.next-page { display: flex; justify-content: center; padding: 1em; }%s</style>
 	<link rel="preconnect" href="https://64.media.tumblr.com/" />
 	<link rel="manifest" href="/manifest.webmanifest" />
 	<meta name="theme_color" content="#222222" />
@@ -525,19 +525,7 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 
 			return fmt.Sprintf(`<a %shref=%q%s>%s</a>`, parts[1], "/"+parts[3], parts[2], "@"+parts[3])
 		})
-		postHTML = tumblrLinksRE.ReplaceAllStringFunc(postHTML, func(repl string) string {
-			u, err := url.Parse(repl)
-			if err != nil {
-				log.Printf("could not parse url: %s", err)
-				return repl
-			}
-
-			tumblrName := u.Host[:strings.Index(u.Host, ".")]
-			u.Host = ""
-			u.Scheme = ""
-			u.Path = path.Join(tumblrName, u.Path)
-			return u.String()
-		})
+		postHTML = tumblrLinksRE.ReplaceAllStringFunc(postHTML, tumblrToInternal)
 		postHTML = videoRE.ReplaceAllStringFunc(postHTML, func(repl string) string {
 			return `<video preload="metadata" controls="" `
 		})
@@ -557,7 +545,12 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 			}
 			fmt.Fprintln(w, `</ul>`)
 		}
-		fmt.Fprintf(w, `<time title="%s" datetime="%s">%s ago</time>, <a href=%q>link</a>`, post.Date, post.DateString, prettyDuration(time.Since(post.Date)), post.URL)
+		fmt.Fprintf(w, `<time title="%s" datetime="%s">%s ago</time>, `, post.Date, post.DateString, prettyDuration(time.Since(post.Date)))
+		if post.Source == "tumblr" {
+			fmt.Fprintf(w, `<a href=%q>link</a> <a class="tumblr-link" href=%q>t</a>`, tumblrToInternal(post.URL), post.URL)
+		} else {
+			fmt.Fprintf(w, `<a href=%q>link</a>`, post.URL)
+		}
 		fmt.Fprint(w, "</footer>")
 		fmt.Fprintln(w, "</article>")
 
@@ -665,6 +658,20 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 
 	fmt.Fprintln(w, `</body>
 </html>`)
+}
+
+func tumblrToInternal(link string) string {
+	u, err := url.Parse(link)
+	if err != nil {
+		log.Printf("could not parse url: %s", err)
+		return link
+	}
+
+	tumblrName := u.Host[:strings.Index(u.Host, ".")]
+	u.Host = ""
+	u.Scheme = ""
+	u.Path = path.Join("/", tumblrName, u.Path)
+	return u.String()
 }
 
 type Search struct {
@@ -891,7 +898,12 @@ func HandlePost(w http.ResponseWriter, req *http.Request) {
 					attrs := make([]html.Attribute, 0, len(child.Attr))
 					for _, attr := range child.Attr {
 						switch attr.Key {
-						case "src", "href", "rel", "title", "alt", "class":
+						case "href":
+							if strings.Contains(attr.Val, ".tumblr.com") {
+								attr.Val = tumblrToInternal(attr.Val)
+							}
+							attrs = append(attrs, attr)
+						case "src", "rel", "title", "alt", "class":
 							attrs = append(attrs, attr)
 						}
 					}
