@@ -514,7 +514,7 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 			reblogLink := u.String()
 			tumblrLink := "/" + tumblrName
 
-			return fmt.Sprintf(`<a href=%q>%s</a> (<a %shref=%q%s>post</a>):`, tumblrLink, tumblrName, parts[1], reblogLink, parts[4])
+			return fmt.Sprintf(`<img class="avatar" src=%q /> <a href=%q>%s</a> (<a %shref=%q%s>post</a>):`, "/avatar/"+tumblrName, tumblrLink, tumblrName, parts[1], reblogLink, parts[4])
 		})
 		postHTML = tumblrAccountLinkRE.ReplaceAllStringFunc(postHTML, func(repl string) string {
 			parts := tumblrAccountLinkRE.FindStringSubmatch(repl)
