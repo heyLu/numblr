@@ -48,8 +48,8 @@ var imgRE = regexp.MustCompile(`<img `)
 var widthHeightRE = regexp.MustCompile(` (width|height|style)="[^"]+"`)
 var blankLinksRE = regexp.MustCompile(` target="_blank"`)
 var linkRE = regexp.MustCompile(`<a `)
-var tumblrReblogLinkRE = regexp.MustCompile(`<a ([^>]*)href="(https?://[^.]+\.tumblr.com([^" ]+)?)"([^>]*)>(\w+)</a>:`) // <a>account</a>:
-var tumblrAccountLinkRE = regexp.MustCompile(`<a ([^>]*)href="[^"]+"([^>]*)>@(\w+)</a>`)                                // @<account>
+var tumblrReblogLinkRE = regexp.MustCompile(`<a ([^>]*)href="(https?://[^.]+\.tumblr.com([^" ]+)?)"([^>]*)>([-\w]+)</a>\s*:`) // <a>account</a>:
+var tumblrAccountLinkRE = regexp.MustCompile(`<a ([^>]*)href="[^"]+"([^>]*)>@([-\w]+)</a>`)                                   // @<account>
 var tumblrLinksRE = regexp.MustCompile(`https?://([^.]+).tumblr.com([^" ]+)?`)
 var videoRE = regexp.MustCompile(`<video `)
 var autoplayRE = regexp.MustCompile(` autoplay="autoplay"`)
@@ -1116,7 +1116,7 @@ func (tr *tumblrRSS) URL() string {
 	return fmt.Sprintf("https://%s.tumblr.com/rss", tr.name)
 }
 
-var tumblrPostURLRE = regexp.MustCompile(`https?://(\w+).tumblr.com/post/(\d+)(/(.*))?`)
+var tumblrPostURLRE = regexp.MustCompile(`https?://([-\w]+).tumblr.com/post/(\d+)(/(.*))?`)
 
 func (tr *tumblrRSS) Next() (*Post, error) {
 	var post Post
