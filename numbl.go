@@ -892,7 +892,26 @@ func HandlePost(w http.ResponseWriter, req *http.Request) {
 						node.RemoveChild(child)
 						continue
 					}
-				case "iframe", "script", "style":
+				case "iframe":
+					for _, attr := range child.Attr {
+						if attr.Key == "src" && strings.Contains(attr.Val, "/photoset_iframe/") {
+							photosetImages, err := fetchPhotoset(tumblr, attr.Val)
+							if err != nil {
+								log.Printf("Error: Invalid photoset %q: %s", attr.Val, err)
+								break
+							}
+
+							for _, img := range photosetImages {
+								node.InsertBefore(img, child)
+							}
+
+							break
+						}
+					}
+
+					node.RemoveChild(child)
+					continue
+				case "script", "style":
 					node.RemoveChild(child)
 					continue
 				default:
@@ -942,6 +961,53 @@ func HandlePost(w http.ResponseWriter, req *http.Request) {
 	f(node)
 }
 
+func fetchPhotoset(tumblr string, photosetPath string) ([]*html.Node, error) {
+	u, err := url.Parse(photosetPath)
+	if err != nil {
+		return nil, fmt.Errorf("invalid url: %w", err)
+	}
+	u.Scheme = "https"
+	u.Host = tumblr + ".tumblr.com"
+	u.Path = strings.Replace(u.Path, "/0/", "/512/", 1)
+
+	resp, err := http.Get(u.String())
+	if err != nil {
+		return nil, fmt.Errorf("fetch: %w", err)
+	}
+	defer resp.Body.Close()
+
+	node, err := html.Parse(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("parse html: %w", err)
+	}
+
+	nodes := make([]*html.Node, 0, 10)
+
+	var f func(*html.Node)
+	f = func(node *html.Node) {
+		if node.Type == html.ElementNode {
+			switch node.Data {
+			case "img":
+				nodes = append(nodes, node)
+			}
+		}
+		for child := node.FirstChild; child != nil; child = child.NextSibling {
+			if child.Type == html.ElementNode && child.Data == "img" {
+				filterAttributes(child, "src")
+				node.RemoveChild(child)
+				nodes = append(nodes, child)
+				nodes = append(nodes, &html.Node{Type: html.ElementNode, Data: "br"})
+				continue
+			}
+
+			f(child)
+		}
+	}
+	f(node)
+
+	return nodes, nil
+}
+
 func hasAttribute(node *html.Node, attrName, attrValue string) bool {
 	for _, attr := range node.Attr {
 		if attr.Key == attrName && attr.Val == attrValue {
@@ -949,6 +1015,19 @@ func hasAttribute(node *html.Node, attrName, attrValue string) bool {
 		}
 	}
 	return false
+}
+
+func filterAttributes(node *html.Node, keepAttrs ...string) {
+	attrs := make([]html.Attribute, 0, len(node.Attr))
+	for _, attr := range node.Attr {
+		for _, keep := range keepAttrs {
+			if attr.Key == keep {
+				attrs = append(attrs, attr)
+			}
+			break
+		}
+	}
+	node.Attr = attrs
 }
 
 func MergeTumblrs(tumblrs ...Tumblr) Tumblr {
