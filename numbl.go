@@ -606,6 +606,8 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 	}
 
 	fmt.Fprintln(w, `<script>
+  // pretty reloads (sparkly indicator)
+
   let lastScrollTop = window.pageYOffset || document.documentElement.scrollTop;;
 
   var toTopEl = document.querySelector("#link-top");
@@ -631,6 +633,8 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 
   window.addEventListener("beforeunload", reloadSpinner);
 
+  // pull to reload
+
   let startY;
 
   window.addEventListener('touchstart', e => {
@@ -648,6 +652,8 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
       window.location = url.href;
     }
   }, {passive: true});
+
+  // service worker to be detected as a progressive web app in webkit-based browsers
 
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/service-worker.js')
