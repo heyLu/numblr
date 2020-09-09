@@ -653,6 +653,19 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
     }
   }, {passive: true});
 
+  // skip posts with a double-tap
+
+  let lastTouch = 0;
+  window.addEventListener('mousedown', (ev) => {
+    let el = ev.target.closest("article");
+    if (ev.timeStamp - lastTouch < 500 && el != null) {
+      ev.preventDefault();
+      //window.scrollBy({top: el.clientHeight, behaviour: 'smooth'});
+      window.scrollTo({top: el.offsetTop + el.clientHeight - (window.innerHeight * 0.1), behavior: 'auto'});
+    };
+    lastTouch = ev.timeStamp;
+  });
+
   // service worker to be detected as a progressive web app in webkit-based browsers
 
   if ('serviceWorker' in navigator) {
