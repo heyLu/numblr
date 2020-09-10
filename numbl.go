@@ -631,7 +631,18 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
     document.body.appendChild(reloadEl);
   };
 
-  window.addEventListener("beforeunload", reloadSpinner);
+  window.addEventListener("click", (ev) => {
+    if (ev.target.tagName != "A" || new URL(ev.target.href).pathname == window.location.pathname) {
+      return;
+	 }
+	 reloadSpinner();
+  });
+  window.addEventListener("focus", (ev) => {
+    let reloadEl = document.querySelector("#reload");
+    if (reloadEl) {
+      document.body.removeChild(reloadEl);
+	 }
+  });
 
   // pull to reload
 
@@ -650,6 +661,8 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
       }
       url.hash = "";
       window.location = url.href;
+
+      reloadSpinner();
     }
   }, {passive: true});
 
