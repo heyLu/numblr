@@ -377,7 +377,7 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 
 <body>
 
-<a id="top" class="jumper" href="#bottom">▾</a>
+<a class="jumper" href="#bottom">▾</a>
 
 <h1>%s</h1>
 
@@ -558,7 +558,7 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 	}
 
 	fmt.Fprintln(w, `<span id="bottom"></span>
-<a id="link-top" class="jumper" href="#top">▴</a>`)
+<a id="link-top" class="jumper" href="#">▴</a>`)
 
 	if err == nil && lastPost != nil {
 		url := req.URL
