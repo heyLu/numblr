@@ -371,7 +371,7 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 	<style>.jumper { font-size: 2em; float: right; text-decoration: none; }.jump-to-top { position: sticky; bottom: 0.25em; }h1 { word-break: break-all; }blockquote, figure { margin: 0; }blockquote:not(:last-child) { border-bottom: 1px solid #ddd; } blockquote > blockquote:nth-child(1) { border-bottom: 0; }body { scroll-behavior: smooth; font-family: sans-serif; }article{ border-bottom: 1px solid black; padding: 1em 0; }.tags { list-style: none; padding: 0; color: #666; }.tags > li { display: inline }img, video, iframe { max-width: 95vw; }@media (min-width: 60em) { body { margin-left: 15vw; max-width: 60em; } img, video { max-height: 20vh; } img:hover, video:hover { max-height: 100%%; }}.avatar{height: 1em;vertical-align: middle;}a.author,a.author:visited,a.tumblr-link,a.tumblr-link:visited{color: #000; font-weight: bold;}a.tumblr-link{padding: 0.5em; text-decoration: none; font-size: larger; vertical-align: middle;}.next-page { display: flex; justify-content: center; padding: 1em; }%s</style>
 	<link rel="preconnect" href="https://64.media.tumblr.com/" />
 	<link rel="manifest" href="/manifest.webmanifest" />
-	<meta name="theme_color" content="#222222" />
+	<meta name="theme-color" content="#222222" />
 	<link rel="icon" href="/favicon.png" />
 </head>
 
