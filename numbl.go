@@ -66,7 +66,7 @@ var config struct {
 }
 
 const CacheTime = 10 * time.Minute
-const AvatarSize = 64
+const AvatarSize = 32
 const AvatarCacheTime = 30 * 24 * time.Hour
 
 var cacheFn CacheFn = NewCachedTumblr
