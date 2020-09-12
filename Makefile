@@ -18,7 +18,7 @@ reload_run_db:
 	git ls-files --cached --others | grep -v '_test.go$$' | grep '.go$$' | entr -c -r go run . -addr :5556 -db cache.db
 
 reload_test:
-	git ls-files --cached --others | grep -v '_test.go$$' | grep '.go$$' | entr -c -r go test .
+	git ls-files --cached --others | grep '.go$$' | entr -c -r go test .
 
 tmux:
 	tmux split-window -l 20 -c $(PWD) make reload_run
