@@ -2,11 +2,100 @@ package main
 
 import (
 	"bytes"
+	"encoding/xml"
 	"fmt"
+	"io"
+	"net/http"
+	"regexp"
 	"strings"
+	"time"
 
 	"golang.org/x/net/html"
 )
+
+const TumblrDate = "Mon, 2 Jan 2006 15:04:05 -0700"
+
+func NewTumblrRSS(name string) (Tumblr, error) {
+	rssURL := fmt.Sprintf("https://%s.tumblr.com/rss", name)
+	resp, err := http.Get(rssURL)
+	if err != nil {
+		return nil, fmt.Errorf("download %q: %w", name, err)
+	}
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("download: wrong response code: %d", resp.StatusCode)
+	}
+
+	dec := xml.NewDecoder(resp.Body)
+	token, err := dec.Token()
+	for err == nil {
+		el, ok := token.(xml.EndElement)
+		if ok && el.Name.Local == "link" {
+			break
+		}
+		token, err = dec.Token()
+	}
+	if err != nil && err != io.EOF {
+		return nil, fmt.Errorf("skip token: %w", err)
+	}
+
+	return &tumblrRSS{name: name, r: resp.Body, dec: dec, dateFormat: TumblrDate}, nil
+}
+
+type tumblrRSS struct {
+	name       string
+	r          io.ReadCloser
+	dec        *xml.Decoder
+	dateFormat string
+}
+
+func (tr *tumblrRSS) Name() string {
+	return tr.name
+}
+
+func (tr *tumblrRSS) URL() string {
+	return fmt.Sprintf("https://%s.tumblr.com/rss", tr.name)
+}
+
+var tumblrPostURLRE = regexp.MustCompile(`https?://([-\w]+).tumblr.com/post/(\d+)(/(.*))?`)
+var tumblrQuestionRE = regexp.MustCompile(`\s*<p>`)
+
+func (tr *tumblrRSS) Next() (*Post, error) {
+	var post Post
+	err := tr.dec.Decode(&post)
+	if err != nil {
+		return nil, fmt.Errorf("decode: %w", err)
+	}
+
+	post.Source = "tumblr"
+
+	if tumblrPostURLRE.MatchString(post.ID) {
+		parts := tumblrPostURLRE.FindStringSubmatch(post.ID)
+		if len(parts) >= 3 {
+			post.ID = parts[2]
+		}
+	}
+
+	post.Author = tr.name
+
+	t, dateErr := time.Parse(tr.dateFormat, post.DateString)
+	if dateErr != nil {
+		return nil, fmt.Errorf("invalid date %q: %s", post.DateString, dateErr)
+	}
+	post.Date = t
+
+	// format questions properly
+	if tumblrQuestionRE.MatchString(post.Title) {
+		post.Title = `<blockquote class="question">` + post.Title + `</blockquote>`
+	} else if post.Title != "Photo" && !post.IsReblog() {
+		post.Title = `<h1>` + post.Title + `</h1>`
+	}
+
+	return &post, err
+}
+
+func (tr *tumblrRSS) Close() error {
+	return tr.r.Close()
+}
 
 func FlattenReblogs(reblogHTML string) (flattenedHTML string, err error) {
 	node, err := html.Parse(strings.NewReader(reblogHTML))
