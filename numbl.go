@@ -156,6 +156,7 @@ func main() {
 
 	router := mux.NewRouter()
 	router.Use(gziphandler.GzipHandler)
+	router.Use(strictTransportSecurity)
 
 	router.HandleFunc("/favicon.png", func(w http.ResponseWriter, req *http.Request) {
 		w.Header().Set("Content-Type", "image/png")
@@ -318,6 +319,13 @@ func HandleAvatar(w http.ResponseWriter, req *http.Request) {
 	}
 
 	avatarCache.Add(tumblr, buf.Bytes())
+}
+
+func strictTransportSecurity(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		w.Header().Set("Strict-Transport-Security", fmt.Sprintf("max-age=%d", 365*24*60*60))
+		next.ServeHTTP(w, req)
+	})
 }
 
 func HandleTumblr(w http.ResponseWriter, req *http.Request) {
