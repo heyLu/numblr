@@ -41,7 +41,7 @@ type Post struct {
 var isReblogRE = regexp.MustCompile(`^\s*[-\w]+:`)
 
 func (p Post) IsReblog() bool {
-	return isReblogRE.MatchString(p.Title) || strings.Contains(p.DescriptionHTML, `class="tumblr_blog"`)
+	return isReblogRE.MatchString(p.Title)
 }
 
 var imgRE = regexp.MustCompile(`<img `)
@@ -376,7 +376,7 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 	<meta name="viewport" content="width=device-width,minimum-scale=1,initial-scale=1" />
 	<meta name="description" content="Mirror of %s tumblrs" />
 	<title>%s</title>
-	<style>.jumper { font-size: 2em; float: right; text-decoration: none; }.jump-to-top { position: sticky; bottom: 0.25em; }h1 { word-break: break-all; }blockquote, figure { margin: 0; }blockquote:not(:last-child) { border-bottom: 1px solid #ddd; } blockquote > blockquote:nth-child(1) { border-bottom: 0; }body { scroll-behavior: smooth; font-family: sans-serif; }article{ border-bottom: 1px solid black; padding: 1em 0; }.tags { list-style: none; padding: 0; color: #666; }.tags > li { display: inline }img, video, iframe { max-width: 95vw; }@media (min-width: 60em) { body { margin-left: 15vw; max-width: 60em; } img, video { max-height: 20vh; } img:hover, video:hover { max-height: 100%%; }}.avatar{height: 1em;vertical-align: middle;}a.author,a.author:visited,a.tumblr-link,a.tumblr-link:visited{color: #000; font-weight: bold;}a.tumblr-link{padding: 0.5em; text-decoration: none; font-size: larger; vertical-align: middle;}.next-page { display: flex; justify-content: center; padding: 1em; }%s</style>
+	<style>.jumper { font-size: 2em; float: right; text-decoration: none; }.jump-to-top { position: sticky; bottom: 0.25em; }h1 { word-break: break-all; }blockquote, figure { margin: 0; }blockquote:not(:last-child) { border-bottom: 1px solid #ddd; } blockquote > blockquote:nth-child(1) { border-bottom: 0; }blockquote.question{padding-left: 2em;}blockquote.question ::before, blockquote.question ::after { content: "“"; font-family: serif; font-size: x-large; }body { scroll-behavior: smooth; font-family: sans-serif; }article{ border-bottom: 1px solid black; padding: 1em 0; }.tags { list-style: none; padding: 0; color: #666; }.tags > li { display: inline }img, video, iframe { max-width: 95vw; }@media (min-width: 60em) { body { margin-left: 15vw; max-width: 60em; } img, video { max-height: 20vh; } img:hover, video:hover { max-height: 100%%; }}.avatar{height: 1em;vertical-align: middle;}a.author,a.author:visited,a.tumblr-link,a.tumblr-link:visited{color: #000; font-weight: bold;}a.tumblr-link{padding: 0.5em; text-decoration: none; font-size: larger; vertical-align: middle;}.next-page { display: flex; justify-content: center; padding: 1em; }%s</style>
 	<link rel="preconnect" href="https://64.media.tumblr.com/" />
 	<link rel="manifest" href="/manifest.webmanifest" />
 	<meta name="theme-color" content="#222222" />
@@ -1294,6 +1294,7 @@ func (tr *tumblrRSS) URL() string {
 }
 
 var tumblrPostURLRE = regexp.MustCompile(`https?://([-\w]+).tumblr.com/post/(\d+)(/(.*))?`)
+var tumblrQuestionRE = regexp.MustCompile(`\s*<p>`)
 
 func (tr *tumblrRSS) Next() (*Post, error) {
 	var post Post
@@ -1318,6 +1319,13 @@ func (tr *tumblrRSS) Next() (*Post, error) {
 		return nil, fmt.Errorf("invalid date %q: %s", post.DateString, dateErr)
 	}
 	post.Date = t
+
+	// format questions properly
+	if tumblrQuestionRE.MatchString(post.Title) {
+		post.Title = `<blockquote class="question">` + post.Title + `</blockquote>`
+	} else if post.Title != "Photo" && !post.IsReblog() {
+		post.Title = `<h1>` + post.Title + `</h1>`
+	}
 
 	return &post, err
 }
