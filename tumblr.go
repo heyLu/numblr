@@ -45,7 +45,7 @@ func FlattenReblogs(reblogHTML string) (flattenedHTML string, err error) {
 	f(nil, node)
 
 	if root == nil {
-		return reblogHTML, fmt.Errorf("invalid reblog structure %q: %w", reblogHTML, err)
+		return reblogHTML, fmt.Errorf("invalid reblog structure: %q", reblogHTML)
 	}
 
 	buf := new(bytes.Buffer)
