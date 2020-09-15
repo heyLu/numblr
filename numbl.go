@@ -48,6 +48,7 @@ var linkRE = regexp.MustCompile(`<a `)
 var tumblrReblogLinkRE = regexp.MustCompile(`<a ([^>]*)href="(https?://[^.]+\.tumblr.com([^" ]+)?)"([^>]*)>([-\w]+)</a>\s*:`) // <a>account</a>:
 var tumblrAccountLinkRE = regexp.MustCompile(`<a ([^>]*)href="[^"]+"([^>]*)>@([-\w]+)</a>`)                                   // @<account>
 var tumblrLinksRE = regexp.MustCompile(`https?://([^.]+).tumblr.com([^" ]+)?`)
+var instagramLinksRE = regexp.MustCompile(`https?://(www\.)?instagram.com/([^/" ]+)[^" ]*`)
 var videoRE = regexp.MustCompile(`<video `)
 var autoplayRE = regexp.MustCompile(` autoplay="autoplay"`)
 
@@ -539,6 +540,14 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 			return fmt.Sprintf(`<a %shref=%q%s>%s</a>`, parts[1], "/"+parts[3], parts[2], "@"+parts[3])
 		})
 		postHTML = tumblrLinksRE.ReplaceAllStringFunc(postHTML, tumblrToInternal)
+		postHTML = instagramLinksRE.ReplaceAllStringFunc(postHTML, func(repl string) string {
+			parts := instagramLinksRE.FindStringSubmatch(repl)
+			if len(parts) != 3 {
+				log.Printf("Error: invalid instagram link: %s", repl)
+				return repl
+			}
+			return "/" + parts[2] + "@instagram"
+		})
 		postHTML = videoRE.ReplaceAllStringFunc(postHTML, func(repl string) string {
 			return `<video preload="metadata" controls="" `
 		})
