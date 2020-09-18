@@ -149,6 +149,10 @@ func FlattenReblogs(reblogHTML string) (flattenedHTML string, err error) {
 }
 
 func nextElementSibling(node *html.Node) *html.Node {
+	if node == nil {
+		return nil
+	}
+
 	for next := node.NextSibling; next != nil; next = next.NextSibling {
 		if next.Type == html.ElementNode {
 			return next
