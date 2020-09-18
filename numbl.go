@@ -721,6 +721,16 @@ func tumblrToInternal(link string) string {
 		return link
 	}
 
+	if u.Path == "/redirect" {
+		redirect := u.Query().Get("z")
+		if redirect == "" {
+			log.Printf("invalid redirect: %q", link)
+			return link
+		}
+
+		return redirect
+	}
+
 	tumblrName := u.Host[:strings.Index(u.Host, ".")]
 	u.Host = ""
 	u.Scheme = ""
