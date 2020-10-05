@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -150,11 +149,6 @@ func (ct *databaseCaching) Save() error {
 		return fmt.Errorf("update posts: %w", err)
 	}
 
-	postUpdateCount, err := res.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("row count: %w", err)
-	}
-
 	res, err = ct.db.Exec(`INSERT OR REPLACE INTO feed_infos VALUES (?, ?, ?)`, ct.uncached.Name(), ct.uncached.URL(), ct.cachedAt)
 	if err != nil {
 		return fmt.Errorf("update feed_infos: %w", err)
@@ -168,8 +162,6 @@ func (ct *databaseCaching) Save() error {
 	if count != 1 {
 		return fmt.Errorf("expected 1 updated row, but was %d", count)
 	}
-
-	log.Printf("updating %s: %d posts updated, %d rows changed\n", ct.uncached.Name(), len(ct.posts), postUpdateCount)
 
 	return nil
 }
