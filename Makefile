@@ -1,9 +1,9 @@
 .PHONY: lighthouse.html
 
-numbl: favicon_png.go *.go Makefile
+numblr: favicon_png.go *.go Makefile
 	go build .
-	strip numbl
-	upx numbl
+	strip numblr
+	upx numblr
 
 favicon_png.go: favicon.png embed.rb Makefile
 	./embed.rb favicon.png FaviconPNGBytes favicon_png.go

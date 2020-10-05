@@ -1,4 +1,4 @@
-module github.com/heyLu/numbl
+module github.com/heyLu/numblr
 
 go 1.15
 
