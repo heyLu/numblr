@@ -389,8 +389,17 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 
 `, tumbl, title, modeCSS, title)
 
-	fmt.Fprintf(w, `<form method="GET" action=%q><input aria-label="visit feed" name="feed" type="search" value="" placeholder="feed" /></form>`, req.URL.Path)
+	fmt.Fprintf(w, `<form method="GET" action=%q><input aria-label="visit feed" name="feed" type="search" value="" placeholder="feed" list="feeds" /></form>`, req.URL.Path)
+	fmt.Fprintln(w, `<datalist id="feeds">`)
+	for _, tumbl := range tumbls {
+		fmt.Fprintf(w, `<option value=%q>%s</option>`, tumbl, tumbl)
+	}
+	fmt.Fprintln(w, `</datalist>`)
 	fmt.Fprintf(w, `<form method="GET" action=%q><input aria-label="search posts" name="search" type="search" value=%q placeholder="noreblog #art ..." /></form>`, req.URL.Path, req.URL.Query().Get("search"))
+
+	if f, ok := w.(http.Flusher); ok {
+		f.Flush()
+	}
 
 	var tumblr Tumblr
 	var err error
