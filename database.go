@@ -26,6 +26,11 @@ func InitDatabase(dbPath string) (*sql.DB, error) {
 		return nil, fmt.Errorf("setup posts table: %w", err)
 	}
 
+	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS posts_by_author_and_date ON posts (author, date)`)
+	if err != nil {
+		return nil, fmt.Errorf("setup posts index: %w", err)
+	}
+
 	return db, err
 }
 
