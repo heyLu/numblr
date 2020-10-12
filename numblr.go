@@ -43,6 +43,7 @@ func (p Post) IsReblog() bool {
 
 var imgRE = regexp.MustCompile(`<img `)
 var widthHeightRE = regexp.MustCompile(` (width|height|style)="[^"]+"`)
+var origWidthHeightRE = regexp.MustCompile(`data-orig-width="(\d+)" data-orig-height="(\d+)"`)
 var blankLinksRE = regexp.MustCompile(` target="_blank"`)
 var linkRE = regexp.MustCompile(`<a `)
 var tumblrReblogLinkRE = regexp.MustCompile(`<a ([^>]*)href="(https?://[^.]+\.tumblr.com([^" ]+)?)"([^>]*)>([-\w]+)</a>\s*:`) // <a>account</a>:
@@ -374,7 +375,7 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 	<meta name="viewport" content="width=device-width,minimum-scale=1,initial-scale=1" />
 	<meta name="description" content="Mirror of %s tumblrs" />
 	<title>%s</title>
-	<style>.jumper { font-size: 2em; float: right; text-decoration: none; }.jump-to-top { position: sticky; bottom: 0.25em; }h1 { word-break: break-all; }blockquote, figure { margin: 0; }blockquote:not(:last-child) { border-bottom: 1px solid #ddd; } blockquote.question{padding-left: 2em;}blockquote.question ::before, blockquote.question ::after { content: "“"; font-family: serif; font-size: x-large; }body { scroll-behavior: smooth; font-family: sans-serif; }article{ border-bottom: 1px solid black; padding: 1em 0; }.tags { list-style: none; padding: 0; color: #666; }.tags > li { display: inline }img, video, iframe { max-width: 95vw; }@media (min-width: 60em) { body { margin-left: 15vw; max-width: 60em; } img, video { max-width: 95vw; } img:hover, video:hover { max-height: 100%%; }}.avatar{height: 1em;vertical-align: middle;}a.author,a.author:visited,a.tumblr-link,a.tumblr-link:visited{color: #000; font-weight: bold;}a.tumblr-link{padding: 0.5em; text-decoration: none; font-size: larger; vertical-align: middle;}.next-page { display: flex; justify-content: center; padding: 1em; }%s</style>
+	<style>.jumper { font-size: 2em; float: right; text-decoration: none; }.jump-to-top { position: sticky; bottom: 0.25em; }h1 { word-break: break-all; }blockquote, figure { margin: 0; }blockquote:not(:last-child) { border-bottom: 1px solid #ddd; } blockquote.question{padding-left: 2em;}blockquote.question ::before, blockquote.question ::after { content: "“"; font-family: serif; font-size: x-large; }body { scroll-behavior: smooth; font-family: sans-serif; }article{ border-bottom: 1px solid black; padding: 1em 0; }.tags { list-style: none; padding: 0; color: #666; }.tags > li { display: inline }img:not(.avatar), video, iframe { max-width: 95%%; height: auto; object-fit: contain }@media (min-width: 60em) { body { margin-left: 15vw; max-width: 60em; } img:not(.avatar), video { max-width: 95%%; height: auto; object-fit: contain; } img:hover:not(.avatar), video:hover { max-width: 100%%; height: auto; object-fit: contain; }}.avatar{width: 1em;height: 1em;vertical-align: middle;display:inline-block;}a.author,a.author:visited,a.tumblr-link,a.tumblr-link:visited{color: #000; font-weight: bold;}a.tumblr-link{padding: 0.5em; text-decoration: none; font-size: larger; vertical-align: middle;}.next-page { display: flex; justify-content: center; padding: 1em; }%s</style>
 	<link rel="preconnect" href="https://64.media.tumblr.com/" />
 	<link rel="manifest" href="/manifest.webmanifest" />
 	<meta name="theme-color" content="#222222" />
@@ -486,7 +487,7 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 		if avatarURL == "" {
 			avatarURL = "/avatar/" + post.Author
 		}
-		fmt.Fprintf(w, `<p><img class="avatar" src="%s" /> <a class="author" href="/%s">%s</a>:<p>`, avatarURL, post.Author, post.Author)
+		fmt.Fprintf(w, `<p><img class="avatar" src="%s" loading="lazy" /> <a class="author" href="/%s">%s</a>:<p>`, avatarURL, post.Author, post.Author)
 
 		fmt.Fprintln(w, `<section class="post-content">`)
 
@@ -506,12 +507,21 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 		// load first 5 images eagerly, and the rest lazily
 		postHTML = imgRE.ReplaceAllStringFunc(postHTML, func(repl string) string {
 			imageCount++
-			if imageCount > 5 {
+			if imageCount > 0 {
 				return `<img loading="lazy" `
 			}
 			return `<img `
 		})
 		postHTML = widthHeightRE.ReplaceAllString(postHTML, ` `)
+		postHTML = origWidthHeightRE.ReplaceAllStringFunc(postHTML, func(repl string) string {
+			parts := origWidthHeightRE.FindStringSubmatch(repl)
+			if len(parts) != 3 {
+				log.Printf("Error: invalid orig-width-height: %s", repl)
+				return repl
+			}
+
+			return fmt.Sprintf(`width=%q height=%q`, parts[1], parts[2])
+		})
 		postHTML = blankLinksRE.ReplaceAllString(postHTML, ` `)
 		postHTML = linkRE.ReplaceAllStringFunc(postHTML, func(repl string) string {
 			return `<a rel="noreferrer" `
@@ -537,7 +547,7 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 			reblogLink := u.String()
 			tumblrLink := "/" + tumblrName
 
-			return fmt.Sprintf(`<img class="avatar" src=%q /> <a href=%q>%s</a> (<a %shref=%q%s>post</a>):`, "/avatar/"+tumblrName, tumblrLink, tumblrName, parts[1], reblogLink, parts[4])
+			return fmt.Sprintf(`<img class="avatar" src=%q loading="lazy" /> <a href=%q>%s</a> (<a %shref=%q%s>post</a>):`, "/avatar/"+tumblrName, tumblrLink, tumblrName, parts[1], reblogLink, parts[4])
 		})
 		postHTML = tumblrAccountLinkRE.ReplaceAllStringFunc(postHTML, func(repl string) string {
 			parts := tumblrAccountLinkRE.FindStringSubmatch(repl)
