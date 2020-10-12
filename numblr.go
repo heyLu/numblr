@@ -342,6 +342,22 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 	tumbl := tumblsFromRequest(req)
 	tumbls := strings.Split(tumbl, ",")
 
+	var tumblr Tumblr
+	var err error
+	tumblrs := make([]Tumblr, len(tumbls))
+	var wg sync.WaitGroup
+	wg.Add(len(tumbls))
+	for i := range tumbls {
+		go func(i int) {
+			var openErr error
+			tumblrs[i], openErr = NewCachedFeed(tumbls[i], cacheFn)
+			if openErr != nil {
+				err = fmt.Errorf("%s: %w", tumbls[i], openErr)
+			}
+			wg.Done()
+		}(i)
+	}
+
 	search := parseSearch(req)
 
 	limit := 25
@@ -402,34 +418,15 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 		f.Flush()
 	}
 
-	var tumblr Tumblr
-	var err error
-	if strings.Contains(tumbl, ",") {
-		tumblrs := make([]Tumblr, len(tumbls))
-		var wg sync.WaitGroup
-		wg.Add(len(tumbls))
-		for i := range tumbls {
-			go func(i int) {
-				var openErr error
-				tumblrs[i], openErr = NewCachedFeed(tumbls[i], cacheFn)
-				if openErr != nil {
-					err = fmt.Errorf("%s: %w", tumbls[i], openErr)
-				}
-				wg.Done()
-			}(i)
+	wg.Wait()
+	successfulTumblrs := make([]Tumblr, 0, len(tumbls))
+	for _, tumblr := range tumblrs {
+		if tumblr == nil {
+			continue
 		}
-		wg.Wait()
-		successfulTumblrs := make([]Tumblr, 0, len(tumbls))
-		for _, tumblr := range tumblrs {
-			if tumblr == nil {
-				continue
-			}
-			successfulTumblrs = append(successfulTumblrs, tumblr)
-		}
-		tumblr = MergeTumblrs(successfulTumblrs...)
-	} else {
-		tumblr, err = NewCachedFeed(tumbl, cacheFn)
+		successfulTumblrs = append(successfulTumblrs, tumblr)
 	}
+	tumblr = MergeTumblrs(successfulTumblrs...)
 	if err != nil {
 		log.Println("open:", err)
 		fmt.Fprintf(w, `<code style="color: red; font-weight: bold; font-size: larger;">could not load tumblr: %s</code>`, err)
