@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -34,8 +35,14 @@ func InitDatabase(dbPath string) (*sql.DB, error) {
 	return db, err
 }
 
-func ListFeedsOlderThan(db *sql.DB, olderThan time.Time) ([]string, error) {
-	rows, err := db.Query(`SELECT name FROM feed_infos WHERE ? > cached_at`, olderThan)
+func ListFeedsOlderThan(ctx context.Context, db *sql.DB, olderThan time.Time) ([]string, error) {
+	tx, err := db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return nil, fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Commit()
+
+	rows, err := tx.Query(`SELECT name FROM feed_infos WHERE ? > cached_at`, olderThan)
 	if err != nil {
 		return nil, fmt.Errorf("select: %w", err)
 	}
@@ -60,23 +67,33 @@ func ListFeedsOlderThan(db *sql.DB, olderThan time.Time) ([]string, error) {
 }
 
 func NewDatabaseCached(db *sql.DB, name string, uncachedFn FeedFn) (Tumblr, error) {
-	row := db.QueryRow("SELECT cached_at, url FROM feed_infos WHERE name = ?", name)
+	tx, err := db.BeginTx(context.TODO(), &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return nil, fmt.Errorf("begin tx: %w", err)
+	}
+
+	row := tx.QueryRow("SELECT cached_at, url FROM feed_infos WHERE name = ?", name)
 	var cachedAt time.Time
 	var url string
-	err := row.Scan(&cachedAt, &url)
+	err = row.Scan(&cachedAt, &url)
 	if err != nil && err != sql.ErrNoRows {
+		tx.Rollback()
 		return nil, fmt.Errorf("looking up feed: %w", err)
 	}
 
 	isCached := err != sql.ErrNoRows
 	if isCached && time.Since(cachedAt) < CacheTime {
-		rows, err := db.Query("SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? ORDER BY date DESC LIMIT 20", name)
+		rows, err := tx.Query("SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? ORDER BY date DESC LIMIT 20", name)
 		if err != nil {
+			tx.Rollback()
 			return nil, fmt.Errorf("querying posts: %w", err)
 		}
 
-		return &databaseCached{name: name, url: url, rows: rows}, nil
+		return &databaseCached{name: name, url: url, rows: rows, tx: tx}, nil
 	}
+
+	// close readonly tx, open new one later when saving
+	tx.Rollback()
 
 	tumblr, err := uncachedFn(name)
 	if err != nil {
@@ -123,6 +140,11 @@ func (ct *databaseCaching) Close() error {
 }
 
 func (ct *databaseCaching) Save() error {
+	tx, err := ct.db.BeginTx(context.TODO(), &sql.TxOptions{ReadOnly: false})
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+
 	stmt := `INSERT OR REPLACE INTO posts VALUES `
 	vals := make([]interface{}, 0, len(ct.posts)*10)
 	for _, post := range ct.posts {
@@ -131,14 +153,17 @@ func (ct *databaseCaching) Save() error {
 		// 	TEXT, description_html TEXT, tags TEXT, date_string TEXT, date TIME, PRIMARY KEY (name, id))`)
 
 		if post.ID == "" {
+			tx.Rollback()
 			return fmt.Errorf("empty post id: %#v", post)
 		}
 		if post.Source == "" {
+			tx.Rollback()
 			return fmt.Errorf("empty post source: %#v", post)
 		}
 
 		tagsJSON, err := json.Marshal(post.Tags)
 		if err != nil {
+			tx.Rollback()
 			return fmt.Errorf("encode tags: %w", err)
 		}
 
@@ -149,14 +174,21 @@ func (ct *databaseCaching) Save() error {
 	// trim last comma and space
 	stmt = stmt[:len(stmt)-2]
 
-	res, err := ct.db.Exec(stmt, vals...)
+	res, err := tx.Exec(stmt, vals...)
 	if err != nil {
+		tx.Rollback()
 		return fmt.Errorf("update posts: %w", err)
 	}
 
-	res, err = ct.db.Exec(`INSERT OR REPLACE INTO feed_infos VALUES (?, ?, ?)`, ct.uncached.Name(), ct.uncached.URL(), ct.cachedAt)
+	res, err = tx.Exec(`INSERT OR REPLACE INTO feed_infos VALUES (?, ?, ?)`, ct.uncached.Name(), ct.uncached.URL(), ct.cachedAt)
 	if err != nil {
+		tx.Rollback()
 		return fmt.Errorf("update feed_infos: %w", err)
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return fmt.Errorf("commit: %w", err)
 	}
 
 	count, err := res.RowsAffected()
@@ -176,6 +208,7 @@ type databaseCached struct {
 	name     string
 	url      string
 	rows     *sql.Rows
+	tx       *sql.Tx
 }
 
 func (dc *databaseCached) Name() string {
@@ -211,5 +244,11 @@ func (dc *databaseCached) Next() (*Post, error) {
 }
 
 func (dc *databaseCached) Close() error {
+	if dc.tx != nil {
+		err := dc.tx.Rollback()
+		if err != nil {
+			fmt.Printf("close tx: %s\n", err)
+		}
+	}
 	return dc.rows.Close()
 }

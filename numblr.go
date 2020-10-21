@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -98,7 +99,7 @@ func main() {
 
 		go func() {
 			refreshFn := func() {
-				feeds, err := ListFeedsOlderThan(db, time.Now().Add(-CacheTime))
+				feeds, err := ListFeedsOlderThan(context.Background(), db, time.Now().Add(-CacheTime))
 				if err != nil {
 					log.Printf("Error: listing feeds in background: %s", err)
 					return
