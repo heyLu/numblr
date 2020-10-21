@@ -592,6 +592,9 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 		}
 		fmt.Fprint(w, "</footer>")
 		fmt.Fprintln(w, "</article>")
+		if f, ok := w.(http.Flusher); ok {
+			f.Flush()
+		}
 
 		nextPost()
 	}
