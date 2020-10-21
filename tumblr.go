@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/xml"
 	"fmt"
 	"io"
@@ -15,9 +16,13 @@ import (
 
 const TumblrDate = "Mon, 2 Jan 2006 15:04:05 -0700"
 
-func NewTumblrRSS(name string) (Tumblr, error) {
+func NewTumblrRSS(ctx context.Context, name string) (Tumblr, error) {
 	rssURL := fmt.Sprintf("https://%s.tumblr.com/rss", name)
-	resp, err := http.Get(rssURL)
+	req, err := http.NewRequestWithContext(ctx, "GET", rssURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("new request: %w", err)
+	}
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("download %q: %w", name, err)
 	}

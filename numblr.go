@@ -1209,7 +1209,14 @@ func NewCachedFeed(name string, cacheFn CacheFn) (Tumblr, error) {
 	case strings.Contains(name, "@") || strings.Contains(name, "."):
 		return cacheFn(name, NewRSS)
 	default:
-		return cacheFn(name, NewTumblrRSS)
+		return cacheFn(name, func(name string) (Tumblr, error) {
+			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+			go func() {
+				time.Sleep(1 * time.Second)
+				cancel()
+			}()
+			return NewTumblrRSS(ctx, name)
+		})
 	}
 }
 
