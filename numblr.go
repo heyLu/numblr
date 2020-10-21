@@ -42,6 +42,7 @@ func (p Post) IsReblog() bool {
 	return isReblogRE.MatchString(p.Title)
 }
 
+var contentNoteRE = regexp.MustCompile(`\b(tw|trigger warning|cn|content note)\b`)
 var imgRE = regexp.MustCompile(`<img `)
 var widthHeightRE = regexp.MustCompile(` (width|height|style)="[^"]+"`)
 var origWidthHeightRE = regexp.MustCompile(`data-orig-width="(\d+)" data-orig-height="(\d+)"`)
@@ -486,6 +487,16 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 			avatarURL = "/avatar/" + post.Author
 		}
 		fmt.Fprintf(w, `<p><img class="avatar" src="%s" loading="lazy" /> <a class="author" href="/%s">%s</a>:<p>`, avatarURL, post.Author, post.Author)
+
+		if len(post.Tags) > 0 {
+			fmt.Fprint(w, `<ul class="tags content-notes">`)
+			for _, tag := range post.Tags {
+				if contentNoteRE.MatchString(tag) {
+					fmt.Fprintf(w, `<li>#%s</li> `, tag)
+				}
+			}
+			fmt.Fprintln(w, `</ul>`)
+		}
 
 		fmt.Fprintln(w, `<section class="post-content">`)
 
