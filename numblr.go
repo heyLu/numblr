@@ -341,20 +341,19 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	tumbl := tumblsFromRequest(req)
-	tumbls := strings.Split(tumbl, ",")
+	settings := SettingsFromRequest(req)
 
 	var tumblr Tumblr
 	var err error
-	tumblrs := make([]Tumblr, len(tumbls))
+	tumblrs := make([]Tumblr, len(settings.SelectedFeeds))
 	var wg sync.WaitGroup
-	wg.Add(len(tumbls))
-	for i := range tumbls {
+	wg.Add(len(settings.SelectedFeeds))
+	for i := range settings.SelectedFeeds {
 		go func(i int) {
 			var openErr error
-			tumblrs[i], openErr = NewCachedFeed(tumbls[i], cacheFn)
+			tumblrs[i], openErr = NewCachedFeed(settings.SelectedFeeds[i], cacheFn)
 			if openErr != nil {
-				err = fmt.Errorf("%s: %w", tumbls[i], openErr)
+				err = fmt.Errorf("%s: %w", settings.SelectedFeeds[i], openErr)
 			}
 			wg.Done()
 		}(i)
@@ -380,7 +379,7 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 	if _, ok := req.URL.Query()["night-mode"]; ok {
 		modeCSS = nightModeCSS
 	}
-	title := tumbl
+	title := strings.Join(settings.SelectedFeeds, ",")
 	if req.URL.Path == "" || req.URL.Path == "/" {
 		title = "everything"
 	} else if mux.Vars(req)["list"] != "" {
@@ -406,11 +405,11 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 
 <h1>%s</h1>
 
-`, tumbl, title, modeCSS, title)
+`, title, title, modeCSS, title)
 
 	fmt.Fprintf(w, `<form method="GET" action=%q><input aria-label="visit feed" name="feed" type="search" value="" placeholder="feed" list="feeds" /></form>`, req.URL.Path)
 	fmt.Fprintln(w, `<datalist id="feeds">`)
-	for _, tumbl := range tumbls {
+	for _, tumbl := range settings.SelectedFeeds {
 		fmt.Fprintf(w, `<option value=%q>%s</option>`, tumbl, tumbl)
 	}
 	fmt.Fprintln(w, `</datalist>`)
@@ -421,7 +420,7 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 	}
 
 	wg.Wait()
-	successfulTumblrs := make([]Tumblr, 0, len(tumbls))
+	successfulTumblrs := make([]Tumblr, 0, len(tumblrs))
 	for _, tumblr := range tumblrs {
 		if tumblr == nil {
 			continue
@@ -439,7 +438,7 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 	defer func() {
 		err := tumblr.Close()
 		if err != nil {
-			log.Printf("Error: closing %s: %s", tumbl, err)
+			log.Printf("Error: closing %s: %s", settings.SelectedFeeds, err)
 		}
 	}()
 	openTime := time.Since(start)
@@ -635,7 +634,7 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 <form method="POST" action="/settings/clear">
 	<input type="submit" value="Clear" title="FIXME: clear currently broken :/" disabled />
 </form>
-`, mux.Vars(req)["list"], len(tumbls)+1, strings.Join(tumbls, "\n"))
+`, mux.Vars(req)["list"], len(settings.SelectedFeeds)+1, strings.Join(settings.SelectedFeeds, "\n"))
 
 	fmt.Fprintln(w, `<section id="lists">
 <h1>Lists</h1>
@@ -881,16 +880,27 @@ func parseSearch(req *http.Request) Search {
 	return search
 }
 
-func tumblsFromRequest(req *http.Request) string {
+type Settings struct {
+	// SelectedFeeds are the feeds that are explicitely selected, e.g. on
+	// the index page, by specifying feeds in the url, or by being on a
+	// list page.
+	SelectedFeeds []string
+}
+
+func SettingsFromRequest(req *http.Request) Settings {
+	settings := Settings{}
+
 	isList := strings.HasPrefix(req.URL.Path, "/list/")
 
-	// explicitely specified
-	tumbl := req.URL.Path[1:]
-	if tumbl != "" && !isList {
-		return tumbl
+	// explicitely specified in url
+	feeds := req.URL.Path[1:]
+	if feeds != "" && !isList {
+		settings.SelectedFeeds = strings.Split(feeds, ",")
+		return settings
 	}
 
 	cookieName := CookieName
+
 	if isList {
 		cookieName = CookieName + "-list-" + mux.Vars(req)["list"]
 	}
@@ -900,14 +910,17 @@ func tumblsFromRequest(req *http.Request) string {
 		if err != http.ErrNoCookie {
 			log.Printf("getting cookie: %s", err)
 		}
-		return config.DefaultTumblr
+		settings.SelectedFeeds = strings.Split(config.DefaultTumblr, ",")
+		return settings
 	}
 
 	if cookie.Value != "" {
-		return cookie.Value
+		settings.SelectedFeeds = strings.Split(cookie.Value, ",")
+		return settings
 	}
 
-	return config.DefaultTumblr
+	settings.SelectedFeeds = strings.Split(config.DefaultTumblr, ",")
+	return settings
 }
 
 func prettyDuration(dur time.Duration) string {
