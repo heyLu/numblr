@@ -975,7 +975,7 @@ func HandlePost(w http.ResponseWriter, req *http.Request) {
 
 	<link rel="icon" href=%q />
 
-	<style>h1 { word-break: break-all; }blockquote, figure { margin: 0; }blockquote:not(:last-child) { border-bottom: 1px solid #ddd; } blockquote > blockquote:nth-child(1) { border-bottom: 0; }body { font-family: sans-serif; }article{ border-bottom: 1px solid black; padding: 1em 0; }.tags { list-style: none; padding: 0; color: #666; }.tags > li { display: inline }img, video, iframe { max-width: 95vw; }@media (min-width: 60em) { body { margin-left: 15vw; } article { max-width: 60em; } img, video { max-height: 20vh; width: auto; } img:hover, video:hover { max-height: 100%%; }}.avatar{height: 1em;}a.author,a.author:visited{color: #000;}%s</style>
+	<style>h1 { word-break: break-all; }blockquote, figure { margin: 0; }blockquote:not(:last-child) { border-bottom: 1px solid #ddd; } blockquote > blockquote:nth-child(1) { border-bottom: 0; }body { font-family: sans-serif; }article{ border-bottom: 1px solid black; padding: 1em 0; }.tags { list-style: none; padding: 0; color: #666; }.tags > li { display: inline }img, video, iframe { max-width: 95vw; }@media (min-width: 60em) { body { margin-left: 15vw; } article { max-width: 60em; } img, video { max-height: 50vh; width: auto; } img:hover, video:hover { max-height: 100%%; }}.avatar{height: 1em;}a.author,a.author:visited{color: #000;}%s</style>
 	<style>.post-reblog-header img { height: 1em; vertical-align: middle; }.post-reblog-header .post-avatar { display: inline-block; }.post-reblog-header .post-tumblelog-name:after { content: ":"; }</style>
 </head>
 
@@ -1024,6 +1024,36 @@ func HandlePost(w http.ResponseWriter, req *http.Request) {
 				case "script", "style":
 					node.RemoveChild(child)
 					continue
+				case "figure":
+					attrs := make([]html.Attribute, 0, 2)
+					for _, attr := range child.Attr {
+						switch attr.Key {
+						case "data-orig-width", "data-orig-height":
+							attrs = append(attrs, attr)
+						}
+					}
+					child.Attr = attrs
+				case "video":
+					attrs := []html.Attribute{{Key: "preload", Val: "metadata"}, {Key: "controls"}}
+					for _, attr := range child.Attr {
+						switch attr.Key {
+						case "poster", "muted":
+							attrs = append(attrs, attr)
+						}
+					}
+					if child.Parent.Type == html.ElementNode && child.Parent.Data == "figure" {
+						for _, attr := range child.Parent.Attr {
+							switch attr.Key {
+							case "data-orig-width":
+								attr.Key = "width"
+								attrs = append(attrs, attr)
+							case "data-orig-height":
+								attr.Key = "height"
+								attrs = append(attrs, attr)
+							}
+						}
+					}
+					child.Attr = attrs
 				default:
 					attrs := make([]html.Attribute, 0, len(child.Attr))
 					for _, attr := range child.Attr {
