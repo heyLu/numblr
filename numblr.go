@@ -46,6 +46,7 @@ var contentNoteRE = regexp.MustCompile(`\b(tw|trigger warning|cn|content note)\b
 var imgRE = regexp.MustCompile(`<img `)
 var widthHeightRE = regexp.MustCompile(` (width|height|style)="[^"]+"`)
 var origWidthHeightRE = regexp.MustCompile(`data-orig-width="(\d+)" data-orig-height="(\d+)"`)
+var origHeightWidthRE = regexp.MustCompile(`data-orig-height="(\d+)" data-orig-width="(\d+)"`)
 var blankLinksRE = regexp.MustCompile(` target="_blank"`)
 var linkRE = regexp.MustCompile(`<a `)
 var tumblrReblogLinkRE = regexp.MustCompile(`<a ([^>]*)href="(https?://[^.]+\.tumblr.com([^" ]+)?)"([^>]*)>([-\w]+)</a>\s*:`) // <a>account</a>:
@@ -535,6 +536,15 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 			}
 
 			return fmt.Sprintf(`width=%q height=%q`, parts[1], parts[2])
+		})
+		postHTML = origHeightWidthRE.ReplaceAllStringFunc(postHTML, func(repl string) string {
+			parts := origHeightWidthRE.FindStringSubmatch(repl)
+			if len(parts) != 3 {
+				log.Printf("Error: invalid orig-width-height: %s", repl)
+				return repl
+			}
+
+			return fmt.Sprintf(`width=%q height=%q`, parts[2], parts[1])
 		})
 		postHTML = blankLinksRE.ReplaceAllString(postHTML, ` `)
 		postHTML = linkRE.ReplaceAllStringFunc(postHTML, func(repl string) string {
