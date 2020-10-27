@@ -350,12 +350,17 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 	wg.Add(len(settings.SelectedFeeds))
 	for i := range settings.SelectedFeeds {
 		go func(i int) {
+			defer wg.Done()
+
+			if strings.HasPrefix(settings.SelectedFeeds[i], ":") {
+				return
+			}
+
 			var openErr error
 			tumblrs[i], openErr = NewCachedFeed(settings.SelectedFeeds[i], cacheFn)
 			if openErr != nil {
 				err = fmt.Errorf("%s: %w", settings.SelectedFeeds[i], openErr)
 			}
-			wg.Done()
 		}(i)
 	}
 
