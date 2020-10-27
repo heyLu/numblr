@@ -519,6 +519,8 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 		} else {
 			postHTML += post.DescriptionHTML
 		}
+		postHTML = strings.ReplaceAll(postHTML, "<body>", "")
+		postHTML = strings.ReplaceAll(postHTML, "</body>", "")
 		// load first 5 images eagerly, and the rest lazily
 		postHTML = imgRE.ReplaceAllStringFunc(postHTML, func(repl string) string {
 			imageCount++
