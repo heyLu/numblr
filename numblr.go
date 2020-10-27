@@ -379,7 +379,7 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 
 	w.Header().Set("Content-Type", `text/html; charset="utf-8"`)
 
-	nightModeCSS := `body { color: #fff; background-color: #222; }.tags { color: #b7b7b7 }a { color: pink; }a:visited { color: #a67070; }article{ border-bottom: 1px solid #666; }blockquote:not(:last-child) { border-bottom: 1px solid #333; }a.author,a.author:visited,a.tumblr-link,a.tumblr-link:visited{color: #fff;}img{filter: brightness(.8) contrast(1.2);}`
+	nightModeCSS := `body { color: #fff; background-color: #222; }.tags a,.tags a:visited{ color: #b7b7b7; text-decoration: none;}a { color: pink; }a:visited { color: #a67070; }article{ border-bottom: 1px solid #666; }blockquote:not(:last-child) { border-bottom: 1px solid #333; }a.author,a.author:visited,a.tumblr-link,a.tumblr-link:visited{color: #fff;}img{filter: brightness(.8) contrast(1.2);}`
 	modeCSS := `@media (prefers-color-scheme: dark) {` + nightModeCSS + `}`
 	if _, ok := req.URL.Query()["night-mode"]; ok {
 		modeCSS = nightModeCSS
@@ -398,7 +398,7 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 	<meta name="color-scheme" content="dark light" />
 	<meta name="description" content="Mirror of %s tumblrs" />
 	<title>%s</title>
-	<style>.jumper { font-size: 2em; float: right; text-decoration: none; }.jump-to-top { position: sticky; bottom: 0.25em; }blockquote, figure { margin: 0; }blockquote:not(:last-child) { border-bottom: 1px solid #ddd; } blockquote.question{padding-left: 2em;}blockquote.question ::before, blockquote.question ::after { content: "“"; font-family: serif; font-size: x-large; }body { scroll-behavior: smooth; font-family: sans-serif; overflow-wrap: break-word; }article{ border-bottom: 1px solid black; padding: 1em 0; }.tags { list-style: none; padding: 0; color: #666; }.tags > li { display: inline }img:not(.avatar), video, iframe { max-width: 100%%; height: auto; object-fit: contain }@media (min-width: 60em) { body { margin-left: 15vw; max-width: 60em; } img:not(.avatar), video { max-height: 50vh; width: auto; object-fit: contain; } img:hover:not(.avatar), video:hover { max-height: 100%%; width: auto; object-fit: contain; }}.avatar{width: 1em;height: 1em;vertical-align: middle;display:inline-block;}a.author,a.author:visited,a.tumblr-link,a.tumblr-link:visited{color: #000; font-weight: bold;}a.tumblr-link{padding: 0.5em; text-decoration: none; font-size: larger; vertical-align: middle;}.next-page { display: flex; justify-content: center; padding: 1em; }%s</style>
+	<style>.jumper { font-size: 2em; float: right; text-decoration: none; }.jump-to-top { position: sticky; bottom: 0.25em; }blockquote, figure { margin: 0; }blockquote:not(:last-child) { border-bottom: 1px solid #ddd; } blockquote.question{padding-left: 2em;}blockquote.question ::before, blockquote.question ::after { content: "“"; font-family: serif; font-size: x-large; }body { scroll-behavior: smooth; font-family: sans-serif; overflow-wrap: break-word; }article{ border-bottom: 1px solid black; padding: 1em 0; }.tags { list-style: none; padding: 0; color: #666; }.tags > li { display: inline }.tags a, .tags a:visited{color: #333; text-decoration: none;}img:not(.avatar), video, iframe { max-width: 100%%; height: auto; object-fit: contain }@media (min-width: 60em) { body { margin-left: 15vw; max-width: 60em; } img:not(.avatar), video { max-height: 50vh; width: auto; object-fit: contain; } img:hover:not(.avatar), video:hover { max-height: 100%%; width: auto; object-fit: contain; }}.avatar{width: 1em;height: 1em;vertical-align: middle;display:inline-block;}a.author,a.author:visited,a.tumblr-link,a.tumblr-link:visited{color: #000; font-weight: bold;}a.tumblr-link{padding: 0.5em; text-decoration: none; font-size: larger; vertical-align: middle;}.next-page { display: flex; justify-content: center; padding: 1em; }%s</style>
 	<link rel="preconnect" href="https://64.media.tumblr.com/" />
 	<link rel="manifest" href="/manifest.webmanifest" />
 	<meta name="theme-color" content="#222222" />
@@ -596,7 +596,11 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 		if len(post.Tags) > 0 {
 			fmt.Fprint(w, `<ul class="tags">`)
 			for _, tag := range post.Tags {
-				fmt.Fprintf(w, `<li>#%s</li> `, tag)
+				tagLink := req.URL
+				tagParams := tagLink.Query()
+				tagParams.Set("search", "#"+tag)
+				tagLink.RawQuery = tagParams.Encode()
+				fmt.Fprintf(w, `<li><a href=%q>#%s</a></li> `, tagLink, tag)
 			}
 			fmt.Fprintln(w, `</ul>`)
 		}
