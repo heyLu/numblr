@@ -100,6 +100,8 @@ func main() {
 		}
 
 		go func() {
+			maxConcurrentFeeds := make(chan bool, 100)
+
 			refreshFn := func() {
 				feeds, err := ListFeedsOlderThan(context.Background(), db, time.Now().Add(-CacheTime))
 				if err != nil {
@@ -114,11 +116,13 @@ func main() {
 							log.Printf("Error: background refresh: opening feed: %s", err)
 							return
 						}
+						maxConcurrentFeeds <- true
 						defer func() {
 							err := feed.Close()
 							if err != nil {
 								log.Printf("Error: background refresh: closing feed: %s", err)
 							}
+							<-maxConcurrentFeeds
 						}()
 
 						_, err = feed.Next()
