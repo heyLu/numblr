@@ -639,11 +639,11 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 <a id="link-top" class="jumper" href="#">▴</a>`)
 
 	if err == nil && lastPost != nil {
-		url := req.URL
-		query := url.Query()
+		nextPage := req.URL
+		query := url.Values{}
 		query.Set("before", lastPost.ID)
-		url.RawQuery = query.Encode()
-		fmt.Fprintf(w, `<div class="next-page"><a href="%s">next page</a></div>`, url)
+		nextPage.RawQuery = query.Encode()
+		fmt.Fprintf(w, `<div class="next-page"><a href="%s">next page</a></div>`, nextPage)
 	}
 
 	fmt.Fprintf(w, `<form method="POST" action="/settings">
