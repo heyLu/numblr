@@ -10,8 +10,8 @@ Inspired by [nitter](https://github.com/zedeus/nitter).
 
 - ✓ rss and atom
 - ✓ tumblr (via rss)
-- ✓ twitter (via nitter)
-- ✓ instagram (via bibliogram)
+- ✓ twitter (via [nitter](https://github.com/zedeus/nitter))
+- ✓ instagram (via [bibliogram](https://sr.ht/~cadence/bibliogram))
 - ✓ mastodon (via rss)
 - ✓ in-memory cache
 - ✓ native dark mode
