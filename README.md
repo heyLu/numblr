@@ -7,6 +7,9 @@ host your own!
 
 Inspired by [nitter](https://github.com/zedeus/nitter).
 
+Does not store any personal data on the server, subscriptions and
+settings are only optionally stored in a cookie in your browser.
+
 ![screenshot of the main page](./screenshot.png)
 
 ## Features
@@ -17,6 +20,7 @@ Inspired by [nitter](https://github.com/zedeus/nitter).
 - ✓ instagram (via [bibliogram](https://sr.ht/~cadence/bibliogram))
 - ✓ mastodon (via rss)
 - ✓ in-memory cache
+- ✓ optional database cache
 - ✓ native dark mode
 - ✓ settings stored in cookie
 - ✓ lists
@@ -25,11 +29,6 @@ Inspired by [nitter](https://github.com/zedeus/nitter).
 
 1. run `make` to fetch dependencies and compile
 2. start using `./numblr` and visit <http://localhost:5555>
-
-## Database cache
-
-- use db, refresh after 10 minutes?
-- use db, refresh in background (better performance?)
 
 ## License
 
