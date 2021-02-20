@@ -89,6 +89,8 @@ func main() {
 	flag.StringVar(&config.AppDisplayMode, "app-display", "browser", "Display mode to use when installed as an app")
 	flag.Parse()
 
+	http.DefaultClient.Timeout = 10 * time.Second
+
 	if config.DatabasePath != "" {
 		db, err := InitDatabase(config.DatabasePath)
 		if err != nil {
