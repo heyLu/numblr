@@ -11,14 +11,14 @@ const NitterDate = "Mon, 2 Jan 2006 15:04:05 MST"
 // NewNitter creates a new feed for Twitter, via Nitter.
 //
 // See https://github.com/zedeus/nitter.
-func NewNitter(name string) (Tumblr, error) {
+func NewNitter(name string, search Search) (Tumblr, error) {
 	nameIdx := strings.Index(name, "@")
 	rssURL := fmt.Sprintf("https://nitter.net/%s/rss", name[:nameIdx])
 	if strings.HasPrefix(name[:nameIdx], "#") {
 		rssURL = fmt.Sprintf("https://nitter.net/search?q=%s", url.QueryEscape(name[:nameIdx]))
 	}
 
-	feed, err := NewRSS(rssURL)
+	feed, err := NewRSS(rssURL, search)
 	if err != nil {
 		return nil, err
 	}

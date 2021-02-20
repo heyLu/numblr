@@ -16,7 +16,7 @@ import (
 
 var RelAlternateMatcher = cascadia.MustCompile(`link[rel=alternate]`)
 
-func NewRSS(name string) (Tumblr, error) {
+func NewRSS(name string, _ Search) (Tumblr, error) {
 	feedURL := name
 	if strings.Contains(name, "@") {
 		parts := strings.SplitN(name, "@", 2)

@@ -22,7 +22,7 @@ func init() {
 // NewBibliogram creates a new feed for Instagram, via Bibliogram.
 //
 // See https://git.sr.ht/~cadence/bibliogram.
-func NewBibliogram(name string) (Tumblr, error) {
+func NewBibliogram(name string, _ Search) (Tumblr, error) {
 	if !bibliogramInitialized {
 		var err error
 		bibliogramInstances, err = initBibliogram()

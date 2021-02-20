@@ -95,8 +95,8 @@ func main() {
 			log.Fatalf("setup database: %s", err)
 		}
 
-		cacheFn = func(name string, uncachedFn FeedFn) (Tumblr, error) {
-			return NewDatabaseCached(db, name, uncachedFn)
+		cacheFn = func(name string, uncachedFn FeedFn, search Search) (Tumblr, error) {
+			return NewDatabaseCached(db, name, uncachedFn, search)
 		}
 
 		go func() {
@@ -111,7 +111,7 @@ func main() {
 
 				for _, feedName := range feeds {
 					func(feedName string) {
-						feed, err := NewCachedFeed(feedName, cacheFn)
+						feed, err := NewCachedFeed(feedName, cacheFn, Search{})
 						if err != nil {
 							log.Printf("Error: background refresh: opening feed: %s", err)
 							return
@@ -347,6 +347,7 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 	}
 
 	settings := SettingsFromRequest(req)
+	search := parseSearch(req)
 
 	var tumblr Tumblr
 	var err error
@@ -362,14 +363,12 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 			}
 
 			var openErr error
-			tumblrs[i], openErr = NewCachedFeed(settings.SelectedFeeds[i], cacheFn)
+			tumblrs[i], openErr = NewCachedFeed(settings.SelectedFeeds[i], cacheFn, search)
 			if openErr != nil {
 				err = fmt.Errorf("%s: %w", settings.SelectedFeeds[i], openErr)
 			}
 		}(i)
 	}
-
-	search := parseSearch(req)
 
 	limit := 25
 	limitParam := req.URL.Query().Get("limit")
@@ -462,11 +461,10 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 		post, err = tumblr.Next()
 	}
 
-	beforeParam := req.URL.Query().Get("before")
-	if beforeParam != "" {
+	if search.BeforeID != "" {
 		nextPost()
 		for err == nil {
-			if post.ID == beforeParam {
+			if post.ID <= search.BeforeID {
 				break
 			}
 			nextPost()
@@ -797,6 +795,8 @@ func tumblrToInternal(link string) string {
 type Search struct {
 	IsActive bool
 
+	BeforeID string
+
 	NoReblogs    bool
 	Terms        []string
 	Tags         []string
@@ -853,13 +853,16 @@ func contains(xs []string, contain string) bool {
 }
 
 func parseSearch(req *http.Request) Search {
+	beforeParam := req.URL.Query().Get("before")
+
 	searchTerms := strings.Fields(req.URL.Query().Get("search"))
-	if len(searchTerms) == 0 {
+	if beforeParam == "" && len(searchTerms) == 0 {
 		return Search{}
 	}
 
 	search := Search{
 		IsActive:     true,
+		BeforeID:     beforeParam,
 		Terms:        make([]string, 0, 1),
 		Tags:         make([]string, 0, 1),
 		ExcludeTags:  make([]string, 0, 1),
@@ -1277,36 +1280,36 @@ type Tumblr interface {
 	Close() error
 }
 
-type FeedFn func(name string) (Tumblr, error)
-type CacheFn func(name string, uncachedFn FeedFn) (Tumblr, error)
+type FeedFn func(name string, search Search) (Tumblr, error)
+type CacheFn func(name string, uncachedFn FeedFn, search Search) (Tumblr, error)
 
-func NewCachedFeed(name string, cacheFn CacheFn) (Tumblr, error) {
+func NewCachedFeed(name string, cacheFn CacheFn, search Search) (Tumblr, error) {
 	switch {
 	case strings.HasSuffix(name, "@twitter"):
-		return cacheFn(name, NewNitter)
+		return cacheFn(name, NewNitter, search)
 	case strings.HasSuffix(name, "@instagram"):
-		return cacheFn(name, NewBibliogram)
+		return cacheFn(name, NewBibliogram, search)
 	case strings.Contains(name, "@") || strings.Contains(name, "."):
-		return cacheFn(name, NewRSS)
+		return cacheFn(name, NewRSS, search)
 	default:
-		return cacheFn(name, func(name string) (Tumblr, error) {
+		return cacheFn(name, func(name string, search Search) (Tumblr, error) {
 			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 			go func() {
 				time.Sleep(1 * time.Second)
 				cancel()
 			}()
-			return NewTumblrRSS(ctx, name)
-		})
+			return NewTumblrRSS(ctx, name, search)
+		}, search)
 	}
 }
 
-func NewCachedTumblr(name string, uncachedFn FeedFn) (Tumblr, error) {
+func NewCachedTumblr(name string, uncachedFn FeedFn, search Search) (Tumblr, error) {
 	cached, isCached := cache.Get(name)
 	if isCached && time.Since(cached.(*cachedTumblr).cachedAt) < CacheTime {
 		tumblr := *cached.(*cachedTumblr)
 		return &tumblr, nil
 	}
-	tumblr, err := uncachedFn(name)
+	tumblr, err := uncachedFn(name, search)
 	if err != nil {
 		return nil, err
 	}

@@ -66,7 +66,7 @@ func ListFeedsOlderThan(ctx context.Context, db *sql.DB, olderThan time.Time) ([
 	return feeds, nil
 }
 
-func NewDatabaseCached(db *sql.DB, name string, uncachedFn FeedFn) (Tumblr, error) {
+func NewDatabaseCached(db *sql.DB, name string, uncachedFn FeedFn, search Search) (Tumblr, error) {
 	tx, err := db.BeginTx(context.TODO(), &sql.TxOptions{ReadOnly: true})
 	if err != nil {
 		return nil, fmt.Errorf("begin tx: %w", err)
@@ -83,7 +83,12 @@ func NewDatabaseCached(db *sql.DB, name string, uncachedFn FeedFn) (Tumblr, erro
 
 	isCached := err != sql.ErrNoRows
 	if isCached && time.Since(cachedAt) < CacheTime {
-		rows, err := tx.Query("SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? ORDER BY date DESC LIMIT 20", name)
+		var rows *sql.Rows
+		if search.BeforeID != "" {
+			rows, err = tx.Query("SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? AND id < ? ORDER BY date DESC LIMIT 20", name, search.BeforeID)
+		} else {
+			rows, err = tx.Query("SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? ORDER BY date DESC LIMIT 20", name)
+		}
 		if err != nil {
 			tx.Rollback()
 			return nil, fmt.Errorf("querying posts: %w", err)
@@ -95,7 +100,7 @@ func NewDatabaseCached(db *sql.DB, name string, uncachedFn FeedFn) (Tumblr, erro
 	// close readonly tx, open new one later when saving
 	tx.Rollback()
 
-	tumblr, err := uncachedFn(name)
+	tumblr, err := uncachedFn(name, search)
 	if err != nil {
 		return nil, fmt.Errorf("open uncached: %w", err)
 	}
