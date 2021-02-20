@@ -2,6 +2,9 @@
 
 Alternative Tumblr (and Twitter, Instagram, RSS, ...) frontend.
 
+Very scrappy, but usable and useful for its original author.  Please
+host your own!
+
 Inspired by [nitter](https://github.com/zedeus/nitter).
 
 ![screenshot of the main page](./screenshot.png)
