@@ -139,6 +139,7 @@ func (ct *databaseCaching) Next() (*Post, error) {
 func (ct *databaseCaching) Close() error {
 	err := ct.Save()
 	if err != nil {
+		ct.uncached.Close()
 		return fmt.Errorf("saving: %w", err)
 	}
 	return ct.uncached.Close()

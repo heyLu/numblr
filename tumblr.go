@@ -27,6 +27,7 @@ func NewTumblrRSS(ctx context.Context, name string, _ Search) (Tumblr, error) {
 		return nil, fmt.Errorf("download %q: %w", name, err)
 	}
 	if resp.StatusCode != 200 {
+		resp.Body.Close()
 		return nil, fmt.Errorf("download: wrong response code: %d", resp.StatusCode)
 	}
 
@@ -40,6 +41,7 @@ func NewTumblrRSS(ctx context.Context, name string, _ Search) (Tumblr, error) {
 		token, err = dec.Token()
 	}
 	if err != nil && err != io.EOF {
+		resp.Body.Close()
 		return nil, fmt.Errorf("skip token: %w", err)
 	}
 
@@ -95,7 +97,7 @@ func (tr *tumblrRSS) Next() (*Post, error) {
 		post.Title = `<h1>` + post.Title + `</h1>`
 	}
 
-	return &post, err
+	return &post, nil
 }
 
 func (tr *tumblrRSS) Close() error {
