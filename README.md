@@ -7,10 +7,14 @@ host your own!
 
 Inspired by [nitter](https://github.com/zedeus/nitter).
 
-Does not store any personal data on the server, subscriptions and
-settings are only optionally stored in a cookie in your browser.
-
 ![screenshot of the main page](./screenshot.png)
+
+## Principles
+
+- does not store any personal data on the server
+- take back control (filter and mute with abandon)
+- cookies and javascript are not necessary for use
+- but subscriptions and settings can optionally saved using cookies
 
 ## Features
 
