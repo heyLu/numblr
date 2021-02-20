@@ -4,6 +4,8 @@ Alternative Tumblr (and Twitter, Instagram, RSS, ...) frontend.
 
 Inspired by [nitter](https://github.com/zedeus/nitter).
 
+![screenshot of the main page](./screenshot.png)
+
 ## Features
 
 - ✓ rss and atom
@@ -15,6 +17,11 @@ Inspired by [nitter](https://github.com/zedeus/nitter).
 - ✓ native dark mode
 - ✓ settings stored in cookie
 - ✓ lists
+
+## Building
+
+1. run `make` to fetch dependencies and compile
+2. start using `./numblr` and visit <http://localhost:5555>
 
 ## Database cache
 
