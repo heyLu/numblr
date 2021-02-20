@@ -85,7 +85,7 @@ var httpClient = &http.Client{
 func main() {
 	flag.StringVar(&config.Addr, "addr", "localhost:5555", "Address to listen on")
 	flag.StringVar(&config.DatabasePath, "db", "", "Database path to use")
-	flag.StringVar(&config.DefaultTumblr, "default", "nettleforest", "Default tumblr to view")
+	flag.StringVar(&config.DefaultTumblr, "default", "staff,engineering", "Default tumblr to view")
 	flag.StringVar(&config.AppDisplayMode, "app-display", "browser", "Display mode to use when installed as an app")
 	flag.Parse()
 
