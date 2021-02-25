@@ -87,6 +87,7 @@ func main() {
 	flag.StringVar(&config.DatabasePath, "db", "", "Database path to use")
 	flag.StringVar(&config.DefaultTumblr, "default", "staff,engineering", "Default tumblr to view")
 	flag.StringVar(&config.AppDisplayMode, "app-display", "browser", "Display mode to use when installed as an app")
+	flag.StringVar(&NitterURL, "nitter-url", "https://nitter.net", "Nitter instance to use")
 	flag.Parse()
 
 	http.DefaultClient.Timeout = 10 * time.Second
