@@ -474,7 +474,7 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	imageCount := 0
+	posts := make([]*Post, 0, limit)
 	nextPost()
 	for err == nil {
 		if !search.Matches(post) {
@@ -482,15 +482,23 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 			continue
 		}
 
+		if postCount >= limit {
+			break
+		}
+
+		postCount++
+
+		posts = append(posts, post)
+
+		nextPost()
+	}
+
+	imageCount := 0
+	for _, post := range posts {
 		classes := make([]string, 0, 1)
 		if post.IsReblog() {
 			classes = append(classes, "reblog")
 		}
-
-		if postCount >= limit {
-			break
-		}
-		postCount++
 
 		fmt.Fprintf(w, `<article class=%q>`, strings.Join(classes, " "))
 		avatarURL := post.AvatarURL
@@ -632,8 +640,6 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 		if f, ok := w.(http.Flusher); ok {
 			f.Flush()
 		}
-
-		nextPost()
 	}
 
 	fmt.Fprintln(w, `<span id="bottom"></span>
