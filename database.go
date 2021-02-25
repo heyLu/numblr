@@ -67,7 +67,7 @@ func ListFeedsOlderThan(ctx context.Context, db *sql.DB, olderThan time.Time) ([
 }
 
 func NewDatabaseCached(db *sql.DB, name string, uncachedFn FeedFn, search Search) (Tumblr, error) {
-	tx, err := db.BeginTx(context.TODO(), &sql.TxOptions{ReadOnly: true})
+	tx, err := db.BeginTx(context.Background(), &sql.TxOptions{ReadOnly: true})
 	if err != nil {
 		return nil, fmt.Errorf("begin tx: %w", err)
 	}
@@ -146,7 +146,7 @@ func (ct *databaseCaching) Close() error {
 }
 
 func (ct *databaseCaching) Save() error {
-	tx, err := ct.db.BeginTx(context.TODO(), &sql.TxOptions{ReadOnly: false})
+	tx, err := ct.db.BeginTx(context.Background(), &sql.TxOptions{ReadOnly: false})
 	if err != nil {
 		return fmt.Errorf("begin tx: %w", err)
 	}
