@@ -71,6 +71,8 @@ const CacheTime = 10 * time.Minute
 const AvatarSize = 32
 const AvatarCacheTime = 30 * 24 * time.Hour
 
+const GroupPostsNumber = 5
+
 var cacheFn CacheFn = NewCachedTumblr
 
 var cache *lru.Cache
@@ -475,6 +477,7 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 	}
 
 	posts := make([]*Post, 0, limit)
+
 	nextPost()
 	for err == nil {
 		if !search.Matches(post) {
@@ -493,152 +496,174 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 		nextPost()
 	}
 
+	postGroups := make([][]*Post, 0, limit)
+
+	group, rest := nextPostsGroup(posts, GroupPostsNumber)
+	for len(rest) != 0 {
+		postGroups = append(postGroups, group)
+
+		group, rest = nextPostsGroup(rest, GroupPostsNumber)
+	}
+	if len(group) > 0 {
+		postGroups = append(postGroups, group)
+	}
+
 	imageCount := 0
-	for _, post := range posts {
-		classes := make([]string, 0, 1)
-		if post.IsReblog() {
-			classes = append(classes, "reblog")
+	for _, group := range postGroups {
+		if len(group) >= GroupPostsNumber {
+			fmt.Fprintf(w, `<details open><summary>%d posts by %s</summary>`, len(group), group[0].Author)
 		}
 
-		fmt.Fprintf(w, `<article class=%q>`, strings.Join(classes, " "))
-		avatarURL := post.AvatarURL
-		if avatarURL == "" {
-			avatarURL = "/avatar/" + post.Author
-		}
-		fmt.Fprintf(w, `<p><img class="avatar" src="%s" loading="lazy" /> <a class="author" href="/%s">%s</a>:<p>`, avatarURL, post.Author, post.Author)
+		for _, post := range group {
+			classes := make([]string, 0, 1)
+			if post.IsReblog() {
+				classes = append(classes, "reblog")
+			}
 
-		if len(post.Tags) > 0 {
-			fmt.Fprint(w, `<ul class="tags content-notes">`)
-			for _, tag := range post.Tags {
-				if contentNoteRE.MatchString(tag) {
-					fmt.Fprintf(w, `<li>#%s</li> `, tag)
+			fmt.Fprintf(w, `<article class=%q>`, strings.Join(classes, " "))
+			avatarURL := post.AvatarURL
+			if avatarURL == "" {
+				avatarURL = "/avatar/" + post.Author
+			}
+			fmt.Fprintf(w, `<p><img class="avatar" src="%s" loading="lazy" /> <a class="author" href="/%s">%s</a>:<p>`, avatarURL, post.Author, post.Author)
+
+			if len(post.Tags) > 0 {
+				fmt.Fprint(w, `<ul class="tags content-notes">`)
+				for _, tag := range post.Tags {
+					if contentNoteRE.MatchString(tag) {
+						fmt.Fprintf(w, `<li>#%s</li> `, tag)
+					}
 				}
+				fmt.Fprintln(w, `</ul>`)
 			}
-			fmt.Fprintln(w, `</ul>`)
+
+			fmt.Fprintln(w, `<section class="post-content">`)
+
+			postHTML := ""
+			if post.Title != "Photo" && !post.IsReblog() {
+				postHTML = html.UnescapeString(post.Title)
+			}
+			if post.Source == "tumblr" && post.IsReblog() {
+				reblogHTML, err := FlattenReblogs(post.DescriptionHTML)
+				if err != nil {
+					log.Printf("Error: flatten reblog: %s", err)
+				}
+				postHTML = reblogHTML
+			} else {
+				postHTML += post.DescriptionHTML
+			}
+			postHTML = strings.ReplaceAll(postHTML, "<body>", "")
+			postHTML = strings.ReplaceAll(postHTML, "</body>", "")
+			// load first 5 images eagerly, and the rest lazily
+			postHTML = imgRE.ReplaceAllStringFunc(postHTML, func(repl string) string {
+				imageCount++
+				if imageCount > 0 {
+					return `<img loading="lazy" `
+				}
+				return `<img `
+			})
+			//postHTML = widthHeightRE.ReplaceAllString(postHTML, ` `)
+			postHTML = origWidthHeightRE.ReplaceAllStringFunc(postHTML, func(repl string) string {
+				parts := origWidthHeightRE.FindStringSubmatch(repl)
+				if len(parts) != 3 {
+					log.Printf("Error: invalid orig-width-height: %s", repl)
+					return repl
+				}
+
+				return fmt.Sprintf(`width=%q height=%q`, parts[1], parts[2])
+			})
+			postHTML = origHeightWidthRE.ReplaceAllStringFunc(postHTML, func(repl string) string {
+				parts := origHeightWidthRE.FindStringSubmatch(repl)
+				if len(parts) != 3 {
+					log.Printf("Error: invalid orig-width-height: %s", repl)
+					return repl
+				}
+
+				return fmt.Sprintf(`width=%q height=%q`, parts[2], parts[1])
+			})
+			postHTML = blankLinksRE.ReplaceAllString(postHTML, ` `)
+			postHTML = linkRE.ReplaceAllStringFunc(postHTML, func(repl string) string {
+				return `<a rel="noreferrer" `
+			})
+			postHTML = tumblrReblogLinkRE.ReplaceAllStringFunc(postHTML, func(repl string) string {
+				parts := tumblrReblogLinkRE.FindStringSubmatch(repl)
+				if len(parts) != 6 {
+					log.Printf("Error: invalid tumblr reblog link: %s", repl)
+					return repl
+				}
+
+				u, err := url.Parse(parts[2])
+				if err != nil {
+					log.Printf("could not parse url: %s", err)
+					return repl
+				}
+
+				tumblrName := u.Host[:strings.Index(u.Host, ".")]
+				u.Host = ""
+				u.Scheme = ""
+				u.Path = path.Join("/", tumblrName, u.Path)
+
+				reblogLink := u.String()
+				tumblrLink := "/" + tumblrName
+
+				return fmt.Sprintf(`<img class="avatar" src=%q loading="lazy" /> <a href=%q>%s</a> (<a %shref=%q%s>post</a>):`, "/avatar/"+tumblrName, tumblrLink, tumblrName, parts[1], reblogLink, parts[4])
+			})
+			postHTML = tumblrAccountLinkRE.ReplaceAllStringFunc(postHTML, func(repl string) string {
+				parts := tumblrAccountLinkRE.FindStringSubmatch(repl)
+				if len(parts) != 4 {
+					log.Printf("Error: invalid tumblr account link: %s", repl)
+					return repl
+				}
+
+				return fmt.Sprintf(`<a %shref=%q%s>%s</a>`, parts[1], "/"+parts[3], parts[2], "@"+parts[3])
+			})
+			postHTML = tumblrLinksRE.ReplaceAllStringFunc(postHTML, tumblrToInternal)
+			postHTML = instagramLinksRE.ReplaceAllStringFunc(postHTML, func(repl string) string {
+				parts := instagramLinksRE.FindStringSubmatch(repl)
+				if len(parts) != 3 {
+					log.Printf("Error: invalid instagram link: %s", repl)
+					return repl
+				}
+				return "/" + parts[2] + "@instagram"
+			})
+			postHTML = videoRE.ReplaceAllStringFunc(postHTML, func(repl string) string {
+				return `<video preload="metadata" controls="" `
+			})
+			postHTML = autoplayRE.ReplaceAllStringFunc(postHTML, func(repl string) string {
+				return ``
+			})
+
+			fmt.Fprint(w, postHTML)
+
+			fmt.Fprintln(w, `</section>`)
+
+			fmt.Fprint(w, "<footer>")
+			if len(post.Tags) > 0 {
+				fmt.Fprint(w, `<ul class="tags">`)
+				for _, tag := range post.Tags {
+					tagLink := req.URL
+					tagParams := tagLink.Query()
+					tagParams.Set("search", "#"+tag)
+					tagLink.RawQuery = tagParams.Encode()
+					fmt.Fprintf(w, `<li><a href=%q>#%s</a></li> `, tagLink, tag)
+				}
+				fmt.Fprintln(w, `</ul>`)
+			}
+			fmt.Fprintf(w, `<time title="%s" datetime="%s">%s ago</time>, `, post.Date, post.DateString, prettyDuration(time.Since(post.Date)))
+			if post.Source == "tumblr" {
+				fmt.Fprintf(w, `<a href=%q>link</a> <a class="tumblr-link" href=%q>t</a>`, tumblrToInternal(post.URL), post.URL)
+			} else {
+				fmt.Fprintf(w, `<a href=%q>link</a>`, post.URL)
+			}
+			fmt.Fprint(w, "</footer>")
+			fmt.Fprintln(w, "</article>")
+			if f, ok := w.(http.Flusher); ok {
+				f.Flush()
+			}
 		}
 
-		fmt.Fprintln(w, `<section class="post-content">`)
-
-		postHTML := ""
-		if post.Title != "Photo" && !post.IsReblog() {
-			postHTML = html.UnescapeString(post.Title)
-		}
-		if post.Source == "tumblr" && post.IsReblog() {
-			reblogHTML, err := FlattenReblogs(post.DescriptionHTML)
-			if err != nil {
-				log.Printf("Error: flatten reblog: %s", err)
-			}
-			postHTML = reblogHTML
-		} else {
-			postHTML += post.DescriptionHTML
-		}
-		postHTML = strings.ReplaceAll(postHTML, "<body>", "")
-		postHTML = strings.ReplaceAll(postHTML, "</body>", "")
-		// load first 5 images eagerly, and the rest lazily
-		postHTML = imgRE.ReplaceAllStringFunc(postHTML, func(repl string) string {
-			imageCount++
-			if imageCount > 0 {
-				return `<img loading="lazy" `
-			}
-			return `<img `
-		})
-		//postHTML = widthHeightRE.ReplaceAllString(postHTML, ` `)
-		postHTML = origWidthHeightRE.ReplaceAllStringFunc(postHTML, func(repl string) string {
-			parts := origWidthHeightRE.FindStringSubmatch(repl)
-			if len(parts) != 3 {
-				log.Printf("Error: invalid orig-width-height: %s", repl)
-				return repl
-			}
-
-			return fmt.Sprintf(`width=%q height=%q`, parts[1], parts[2])
-		})
-		postHTML = origHeightWidthRE.ReplaceAllStringFunc(postHTML, func(repl string) string {
-			parts := origHeightWidthRE.FindStringSubmatch(repl)
-			if len(parts) != 3 {
-				log.Printf("Error: invalid orig-width-height: %s", repl)
-				return repl
-			}
-
-			return fmt.Sprintf(`width=%q height=%q`, parts[2], parts[1])
-		})
-		postHTML = blankLinksRE.ReplaceAllString(postHTML, ` `)
-		postHTML = linkRE.ReplaceAllStringFunc(postHTML, func(repl string) string {
-			return `<a rel="noreferrer" `
-		})
-		postHTML = tumblrReblogLinkRE.ReplaceAllStringFunc(postHTML, func(repl string) string {
-			parts := tumblrReblogLinkRE.FindStringSubmatch(repl)
-			if len(parts) != 6 {
-				log.Printf("Error: invalid tumblr reblog link: %s", repl)
-				return repl
-			}
-
-			u, err := url.Parse(parts[2])
-			if err != nil {
-				log.Printf("could not parse url: %s", err)
-				return repl
-			}
-
-			tumblrName := u.Host[:strings.Index(u.Host, ".")]
-			u.Host = ""
-			u.Scheme = ""
-			u.Path = path.Join("/", tumblrName, u.Path)
-
-			reblogLink := u.String()
-			tumblrLink := "/" + tumblrName
-
-			return fmt.Sprintf(`<img class="avatar" src=%q loading="lazy" /> <a href=%q>%s</a> (<a %shref=%q%s>post</a>):`, "/avatar/"+tumblrName, tumblrLink, tumblrName, parts[1], reblogLink, parts[4])
-		})
-		postHTML = tumblrAccountLinkRE.ReplaceAllStringFunc(postHTML, func(repl string) string {
-			parts := tumblrAccountLinkRE.FindStringSubmatch(repl)
-			if len(parts) != 4 {
-				log.Printf("Error: invalid tumblr account link: %s", repl)
-				return repl
-			}
-
-			return fmt.Sprintf(`<a %shref=%q%s>%s</a>`, parts[1], "/"+parts[3], parts[2], "@"+parts[3])
-		})
-		postHTML = tumblrLinksRE.ReplaceAllStringFunc(postHTML, tumblrToInternal)
-		postHTML = instagramLinksRE.ReplaceAllStringFunc(postHTML, func(repl string) string {
-			parts := instagramLinksRE.FindStringSubmatch(repl)
-			if len(parts) != 3 {
-				log.Printf("Error: invalid instagram link: %s", repl)
-				return repl
-			}
-			return "/" + parts[2] + "@instagram"
-		})
-		postHTML = videoRE.ReplaceAllStringFunc(postHTML, func(repl string) string {
-			return `<video preload="metadata" controls="" `
-		})
-		postHTML = autoplayRE.ReplaceAllStringFunc(postHTML, func(repl string) string {
-			return ``
-		})
-
-		fmt.Fprint(w, postHTML)
-
-		fmt.Fprintln(w, `</section>`)
-
-		fmt.Fprint(w, "<footer>")
-		if len(post.Tags) > 0 {
-			fmt.Fprint(w, `<ul class="tags">`)
-			for _, tag := range post.Tags {
-				tagLink := req.URL
-				tagParams := tagLink.Query()
-				tagParams.Set("search", "#"+tag)
-				tagLink.RawQuery = tagParams.Encode()
-				fmt.Fprintf(w, `<li><a href=%q>#%s</a></li> `, tagLink, tag)
-			}
-			fmt.Fprintln(w, `</ul>`)
-		}
-		fmt.Fprintf(w, `<time title="%s" datetime="%s">%s ago</time>, `, post.Date, post.DateString, prettyDuration(time.Since(post.Date)))
-		if post.Source == "tumblr" {
-			fmt.Fprintf(w, `<a href=%q>link</a> <a class="tumblr-link" href=%q>t</a>`, tumblrToInternal(post.URL), post.URL)
-		} else {
-			fmt.Fprintf(w, `<a href=%q>link</a>`, post.URL)
-		}
-		fmt.Fprint(w, "</footer>")
-		fmt.Fprintln(w, "</article>")
-		if f, ok := w.(http.Flusher); ok {
-			f.Flush()
+		if len(group) >= GroupPostsNumber {
+			fmt.Fprintln(w, `</details>`)
 		}
 	}
 
@@ -775,6 +800,25 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 
 	fmt.Fprintln(w, `</body>
 </html>`)
+}
+
+func nextPostsGroup(posts []*Post, groupPostsNumber int) (group []*Post, rest []*Post) {
+	if len(posts) == 0 || len(posts) == 1 {
+		return posts, nil
+	}
+
+	i := 0
+	for ; i+1 < len(posts); i++ {
+		if posts[i].Author != posts[i+1].Author {
+			break
+		}
+	}
+
+	if i+1 >= groupPostsNumber {
+		return posts[:i+1], posts[i+1:]
+	}
+
+	return []*Post{posts[0]}, posts[1:]
 }
 
 func tumblrToInternal(link string) string {
