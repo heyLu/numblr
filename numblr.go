@@ -510,7 +510,7 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 
 	imageCount := 0
 	for _, group := range postGroups {
-		if len(group) >= GroupPostsNumber {
+		if len(settings.SelectedFeeds) > 1 && len(group) >= GroupPostsNumber {
 			fmt.Fprintf(w, `<details open><summary>%d posts by %s</summary>`, len(group), group[0].Author)
 		}
 
@@ -662,7 +662,7 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 			}
 		}
 
-		if len(group) >= GroupPostsNumber {
+		if len(settings.SelectedFeeds) > 1 && len(group) >= GroupPostsNumber {
 			fmt.Fprintln(w, `</details>`)
 		}
 	}
