@@ -42,7 +42,7 @@ func (p Post) IsReblog() bool {
 	return isReblogRE.MatchString(p.Title)
 }
 
-var contentNoteRE = regexp.MustCompile(`\b(tw|trigger warning|cn|content note)\b`)
+var contentNoteRE = regexp.MustCompile(`\b(tw|trigger warning|cn|content note|cw|content warning)\b`)
 var imgRE = regexp.MustCompile(`<img `)
 var widthHeightRE = regexp.MustCompile(` (width|height|style)="[^"]+"`)
 var origWidthHeightRE = regexp.MustCompile(`data-orig-width="(\d+)" data-orig-height="(\d+)"`)
