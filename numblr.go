@@ -1099,6 +1099,25 @@ func HandlePost(w http.ResponseWriter, req *http.Request) {
 
 							break
 						}
+						if attr.Key == "src" && strings.Contains(attr.Val, "/audio_player_iframe/") {
+							u, err := url.Parse(attr.Val)
+							if err != nil {
+								log.Printf("Error: Invalid audio player %q: %s", attr.Val, err)
+								break
+							}
+							audioURL := u.Query().Get("audio_file")
+							audio := html.Node{
+								Type: html.ElementNode,
+								Data: "audio",
+								Attr: []html.Attribute{
+									{Key: "src", Val: audioURL},
+									{Key: "controls"},
+								},
+
+							}
+							node.InsertBefore(&audio, child)
+							break
+						}
 					}
 
 					node.RemoveChild(child)
