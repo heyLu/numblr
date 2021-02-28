@@ -1365,6 +1365,8 @@ func NewCachedFeed(name string, cacheFn CacheFn, search Search) (Tumblr, error) 
 		return cacheFn(name, NewNitter, search)
 	case strings.HasSuffix(name, "@instagram"):
 		return cacheFn(name, NewBibliogram, search)
+	case strings.Contains(name, "archiveofourown.org"):
+		return cacheFn(name, NewAO3, search)
 	case strings.Contains(name, "@") || strings.Contains(name, "."):
 		return cacheFn(name, NewRSS, search)
 	default:
