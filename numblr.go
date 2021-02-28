@@ -1162,6 +1162,10 @@ func HandlePost(w http.ResponseWriter, req *http.Request) {
 						case "href":
 							if strings.Contains(attr.Val, ".tumblr.com") {
 								attr.Val = tumblrToInternal(attr.Val)
+							} else if attr.Val == "/" {
+								attr.Val = "/" + tumblr
+							} else if strings.HasPrefix(attr.Val, "/") {
+								attr.Val = "/" + tumblr + attr.Val
 							}
 							attrs = append(attrs, attr)
 						case "src", "rel", "title", "alt", "class":
