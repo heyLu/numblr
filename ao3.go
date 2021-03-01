@@ -125,6 +125,7 @@ func (ao3 *ao3) Next() (*Post, error) {
 	if summary == nil {
 		return nil, fmt.Errorf("no summary")
 	}
+	// TODO: include common elements from ao3 summary (word count, tag groupings, stats)
 	descriptionHTML := new(bytes.Buffer)
 	for child := summary.FirstChild; child != nil; child = child.NextSibling {
 		// skip whitespace
