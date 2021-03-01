@@ -1,12 +1,9 @@
 .PHONY: lighthouse.html
 
-numblr: favicon_png.go *.go Makefile
+numblr: favicon.png *.go Makefile
 	go build .
 	strip numblr
 	upx numblr
-
-favicon_png.go: favicon.png embed.rb Makefile
-	./embed.rb favicon.png FaviconPNGBytes favicon_png.go
 
 favicon.png: favicon.svg
 	inkscape --export-width=192 --export-height=192 favicon.svg -o favicon.png

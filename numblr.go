@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	_ "embed"
 	"errors"
 	"flag"
 	"fmt"
@@ -73,6 +74,9 @@ const AvatarCacheTime = 30 * 24 * time.Hour
 
 const GroupPostsNumber = 5
 const TagsCollapseCount = 20
+
+//go:embed favicon.png
+var FaviconPNGBytes []byte
 
 var cacheFn CacheFn = NewCachedTumblr
 
