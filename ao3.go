@@ -1,16 +1,16 @@
 package main
 
 import (
-	"time"
-	"strings"
 	"bytes"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
-	"fmt"
+	"strings"
+	"time"
 
-	"golang.org/x/net/html"
 	"github.com/andybalholm/cascadia"
+	"golang.org/x/net/html"
 )
 
 var workMatcher = cascadia.MustCompile("li.work")
@@ -65,7 +65,7 @@ func NewAO3(name string, _ Search) (Tumblr, error) {
 	works := cascadia.QueryAll(node, workMatcher)
 
 	return &ao3{
-		name: name,
+		name:  name,
 		works: works,
 	}, nil
 }
@@ -151,15 +151,15 @@ func (ao3 *ao3) Next() (*Post, error) {
 
 	ao3.works = ao3.works[1:]
 	return &Post{
-		Source: "ao3",
-		ID: id,
-		URL: "https://archiveofourown.org/works/"+id,
-		Title: "<h1>"+title.FirstChild.Data+" by "+author.FirstChild.Data+"</h1>",
-		Author: author.FirstChild.Data,
+		Source:          "ao3",
+		ID:              id,
+		URL:             "https://archiveofourown.org/works/" + id,
+		Title:           "<h1>" + title.FirstChild.Data + " by " + author.FirstChild.Data + "</h1>",
+		Author:          author.FirstChild.Data,
 		DescriptionHTML: descriptionHTML.String(),
-		Tags: tags,
-		DateString: dateString,
-		Date: dateParsed.UTC(),
+		Tags:            tags,
+		DateString:      dateString,
+		Date:            dateParsed.UTC(),
 	}, nil
 }
 

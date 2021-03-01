@@ -7,10 +7,10 @@ import (
 )
 
 func TestNextPostsGroup(t *testing.T) {
-	testCases := []struct{
-		author string
-		groupSize int
-		posts []*Post
+	testCases := []struct {
+		author            string
+		groupSize         int
+		posts             []*Post
 		numGroup, numRest int
 	}{
 		{"a", 3, []*Post{&Post{Author: "a"}, &Post{Author: "a"}, &Post{Author: "a"}, &Post{Author: "b"}, &Post{Author: "c"}, &Post{Author: "d"}}, 3, 3},

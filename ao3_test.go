@@ -1,8 +1,8 @@
 package main
 
 import (
-	"time"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -23,5 +23,5 @@ func TestAO3AuthorFandomFeed(t *testing.T) {
 	assert.Equal(t, "<h1>[VID] You Are A Runner And I Am My Father's Son by astolat</h1>", post.Title, "title")
 	assert.Equal(t, "astolat", post.Author, "author")
 	assert.Equal(t, "<p>I&#39;ll draw three figures on your heart.</p>", post.DescriptionHTML, "description")
-	assert.Equal(t, []string{"Creator Chose Not To Use Archive Warnings","Draco Malfoy/Harry Potter","Draco Malfoy", "Harry Potter", "Vividcon", "Vividcon 2016", "Vividcon 2016 Premieres"}, post.Tags, "tags")
+	assert.Equal(t, []string{"Creator Chose Not To Use Archive Warnings", "Draco Malfoy/Harry Potter", "Draco Malfoy", "Harry Potter", "Vividcon", "Vividcon 2016", "Vividcon 2016 Premieres"}, post.Tags, "tags")
 }
