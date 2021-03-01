@@ -99,6 +99,8 @@ func (ao3 *ao3) Next() (*Post, error) {
 		return nil, fmt.Errorf("invalid id %q", id)
 	}
 
+	postURL := "https://archiveofourown.org/works/" + id
+
 	title := cascadia.Query(work, titleMatcher)
 	if title == nil || title.FirstChild == nil {
 		return nil, fmt.Errorf("no title")
@@ -153,8 +155,8 @@ func (ao3 *ao3) Next() (*Post, error) {
 	return &Post{
 		Source:          "ao3",
 		ID:              id,
-		URL:             "https://archiveofourown.org/works/" + id,
-		Title:           "<h1>" + title.FirstChild.Data + " by " + author.FirstChild.Data + "</h1>",
+		URL:             postURL,
+		Title:           fmt.Sprintf("<h1><a href=%q>", postURL) + title.FirstChild.Data + "</a> by " + author.FirstChild.Data + "</h1>",
 		Author:          author.FirstChild.Data,
 		DescriptionHTML: descriptionHTML.String(),
 		Tags:            tags,
