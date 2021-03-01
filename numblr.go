@@ -706,6 +706,17 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 </form>
 `, mux.Vars(req)["list"], len(settings.SelectedFeeds)+1, strings.Join(settings.SelectedFeeds, "\n"))
 
+	u := url.URL{
+		Path: strings.Join(settings.SelectedFeeds, ","),
+	}
+	if strings.ContainsAny(u.Path, "/&?") {
+		u.Path = "/"
+		query := make(url.Values)
+		query["feeds"] = settings.SelectedFeeds
+		u.RawQuery = query.Encode()
+	}
+	fmt.Fprintf(w, `<p>Share feed via <a href=%q>a link</a>.</p>`, u.String())
+
 	fmt.Fprintln(w, `<section id="lists">
 <h1>Lists</h1>
 
@@ -985,6 +996,11 @@ func SettingsFromRequest(req *http.Request) Settings {
 	settings := Settings{}
 
 	isList := strings.HasPrefix(req.URL.Path, "/list/")
+
+	if req.URL.Query()["feeds"] != nil && len(req.URL.Query()["feeds"]) > 0 {
+		settings.SelectedFeeds = req.URL.Query()["feeds"]
+		return settings
+	}
 
 	// explicitely specified in url
 	feeds := req.URL.Path[1:]
