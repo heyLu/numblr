@@ -1,6 +1,6 @@
 # numblr
 
-Alternative Tumblr (and Twitter, Instagram, RSS, ...) frontend.
+Alternative Tumblr (and Twitter, Instagram, AO3, RSS, ...) frontend.
 
 Very scrappy, but usable and useful for its original author.  Please
 host your own!
@@ -23,6 +23,7 @@ Inspired by [nitter](https://github.com/zedeus/nitter).
 - ✓ twitter (via [nitter](https://github.com/zedeus/nitter))
 - ✓ instagram (via [bibliogram](https://sr.ht/~cadence/bibliogram))
 - ✓ mastodon (via rss)
+- ✓ [ao3](https://archiveofourown.org) (via scraping)
 - ✓ in-memory cache
 - ✓ optional database cache
 - ✓ native dark mode
