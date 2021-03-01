@@ -46,6 +46,11 @@ func NewAO3(name string, _ Search) (Tumblr, error) {
 	}
 	u.RawQuery = query.Encode()
 
+	name, err = url.QueryUnescape(u.String())
+	if err != nil {
+		return nil, fmt.Errorf("unescape %q: %w", u.String(), err)
+	}
+
 	resp, err := http.Get(u.String())
 	if err != nil {
 		return nil, fmt.Errorf("fetching %q: %w", name, err)
@@ -60,7 +65,7 @@ func NewAO3(name string, _ Search) (Tumblr, error) {
 	works := cascadia.QueryAll(node, workMatcher)
 
 	return &ao3{
-		name: u.String(),
+		name: name,
 		works: works,
 	}, nil
 }
