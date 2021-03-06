@@ -525,6 +525,8 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 				classes = append(classes, "reblog")
 			}
 
+			classes = append(classes, post.Source)
+
 			fmt.Fprintf(w, `<article class=%q>`, strings.Join(classes, " "))
 			avatarURL := post.AvatarURL
 			if avatarURL == "" {
