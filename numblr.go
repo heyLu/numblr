@@ -99,6 +99,7 @@ func main() {
 
 	http.DefaultClient.Timeout = 10 * time.Second
 
+	// TODO: unify in-memory cache and database into a pluggable interface
 	if config.DatabasePath != "" {
 		db, err := InitDatabase(config.DatabasePath)
 		if err != nil {
@@ -173,6 +174,8 @@ func main() {
 	router := mux.NewRouter()
 	router.Use(gziphandler.GzipHandler)
 	router.Use(strictTransportSecurity)
+
+	// TODO: implement stats (db size, # posts, # feeds, requests / user agents?)
 
 	router.HandleFunc("/favicon.png", func(w http.ResponseWriter, req *http.Request) {
 		w.Header().Set("Content-Type", "image/png")

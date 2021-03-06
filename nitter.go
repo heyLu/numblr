@@ -54,6 +54,8 @@ func (nr *nitterRSS) Next() (*Post, error) {
 		return nr.rss.Next()
 	}
 
+	// TODO: render nitter posts nicer
+
 	post.Source = "twitter"
 	post.Author = nr.name
 

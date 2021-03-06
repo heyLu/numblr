@@ -90,6 +90,8 @@ func (tr *tumblrRSS) Next() (*Post, error) {
 	}
 	post.Date = t
 
+	// TODO: improve reblog support (take reblog-from title/description?)
+
 	// format questions properly
 	if tumblrQuestionRE.MatchString(post.Title) {
 		post.Title = `<blockquote class="question">` + post.Title + `</blockquote>`
