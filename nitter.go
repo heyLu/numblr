@@ -13,7 +13,7 @@ var NitterURL = "https://nitter.net"
 // NewNitter creates a new feed for Twitter, via Nitter.
 //
 // See https://github.com/zedeus/nitter.
-func NewNitter(name string, search Search) (Tumblr, error) {
+func NewNitter(name string, search Search) (Feed, error) {
 	nameIdx := strings.Index(name, "@")
 	rssURL := fmt.Sprintf("%s/%s/rss", NitterURL, name[:nameIdx])
 	if strings.HasPrefix(name[:nameIdx], "#") {

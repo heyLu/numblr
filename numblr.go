@@ -63,7 +63,7 @@ var config struct {
 	Addr         string
 	DatabasePath string
 
-	DefaultTumblr string
+	DefaultFeed string
 
 	AppDisplayMode string
 }
@@ -78,7 +78,7 @@ const TagsCollapseCount = 20
 //go:embed favicon.png
 var FaviconPNGBytes []byte
 
-var cacheFn CacheFn = NewCachedTumblr
+var cacheFn CacheFn = NewCached
 
 var cache *lru.Cache
 var avatarCache *lru.Cache
@@ -92,7 +92,7 @@ var httpClient = &http.Client{
 func main() {
 	flag.StringVar(&config.Addr, "addr", "localhost:5555", "Address to listen on")
 	flag.StringVar(&config.DatabasePath, "db", "", "Database path to use")
-	flag.StringVar(&config.DefaultTumblr, "default", "staff,engineering", "Default tumblr to view")
+	flag.StringVar(&config.DefaultFeed, "default", "staff,engineering", "Default feeds to view")
 	flag.StringVar(&config.AppDisplayMode, "app-display", "browser", "Display mode to use when installed as an app")
 	flag.StringVar(&NitterURL, "nitter-url", "https://nitter.net", "Nitter instance to use")
 	flag.Parse()
@@ -105,7 +105,7 @@ func main() {
 			log.Fatalf("setup database: %s", err)
 		}
 
-		cacheFn = func(name string, uncachedFn FeedFn, search Search) (Tumblr, error) {
+		cacheFn = func(name string, uncachedFn FeedFn, search Search) (Feed, error) {
 			return NewDatabaseCached(db, name, uncachedFn, search)
 		}
 
@@ -190,7 +190,7 @@ Disallow: /`)
 
 		fmt.Fprintf(w, `{
   "name": "Numblr",
-  "description": "A bare-bones mirror for tumblrs.",
+  "description": "Alternative Tumblr (and Twitter, Instagram, AO3, RSS, ...) frontend.",
   "short_name": "numblr",
   "lang": "en",
   "start_url": "/",
@@ -222,11 +222,11 @@ self.addEventListener('install', function(e) {
 
 	router.HandleFunc("/settings", func(w http.ResponseWriter, req *http.Request) {
 		list := req.FormValue("list")
-		tumblrs := req.FormValue("tumblrs")
+		feeds := req.FormValue("feeds")
 
 		first := true
 		cookieValue := ""
-		for _, tumblr := range strings.Split(tumblrs, "\n") {
+		for _, tumblr := range strings.Split(feeds, "\n") {
 			tumblr = strings.TrimSpace(tumblr)
 			if tumblr == "" {
 				continue
@@ -274,7 +274,7 @@ self.addEventListener('install', function(e) {
 	}).Methods("POST")
 
 	router.HandleFunc("/", HandleTumblr)
-	router.HandleFunc("/{tumblrs}", HandleTumblr)
+	router.HandleFunc("/{feeds}", HandleTumblr)
 
 	router.HandleFunc("/list/{list}", HandleTumblr)
 
@@ -359,9 +359,9 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 	settings := SettingsFromRequest(req)
 	search := parseSearch(req)
 
-	var tumblr Tumblr
+	var feed Feed
 	var err error
-	tumblrs := make([]Tumblr, len(settings.SelectedFeeds))
+	feeds := make([]Feed, len(settings.SelectedFeeds))
 	var wg sync.WaitGroup
 	wg.Add(len(settings.SelectedFeeds))
 	for i := range settings.SelectedFeeds {
@@ -373,7 +373,7 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 			}
 
 			var openErr error
-			tumblrs[i], openErr = NewCachedFeed(settings.SelectedFeeds[i], cacheFn, search)
+			feeds[i], openErr = NewCachedFeed(settings.SelectedFeeds[i], cacheFn, search)
 			if openErr != nil {
 				err = fmt.Errorf("%s: %w", settings.SelectedFeeds[i], openErr)
 			}
@@ -410,7 +410,7 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 	<meta charset="utf-8" />
 	<meta name="viewport" content="width=device-width,minimum-scale=1,initial-scale=1" />
 	<meta name="color-scheme" content="dark light" />
-	<meta name="description" content="Mirror of %s tumblrs" />
+	<meta name="description" content="Mirror of %s feeds" />
 	<title>%s</title>
 	<style>.jumper { font-size: 2em; float: right; text-decoration: none; }.jump-to-top { position: sticky; bottom: 0.25em; }blockquote, figure { margin: 0; }blockquote:not(:last-child) { border-bottom: 1px solid #ddd; } blockquote.question{padding-left: 2em;}blockquote.question ::before, blockquote.question ::after { content: "“"; font-family: serif; font-size: x-large; }body { scroll-behavior: smooth; font-family: sans-serif; overflow-wrap: break-word; }article{ border-bottom: 1px solid black; padding-bottom: 1em; margin-bottom: 1em; }article h1 a, article h4 a { text-decoration: none; border-bottom: 1px dotted black; }.tags { list-style: none; padding: 0; color: #666; }.tags li, .tags display, tags display[open] { display: inline }.tags a, .tags a:visited{color: #333; text-decoration: none;}img:not(.avatar), video, iframe { max-width: 100%%; height: auto; object-fit: contain }@media (min-width: 60em) { body { margin: 0 auto; max-width: 60em; } img:not(.avatar), video { max-height: 50vh; width: auto; object-fit: contain; } img:hover:not(.avatar), video:hover { max-height: 100%%; width: auto; object-fit: contain; }}.avatar{width: 1em;height: 1em;vertical-align: middle;display:inline-block;}a.author,a.author:visited,a.tumblr-link,a.tumblr-link:visited{color: #000; font-weight: bold;}a.tumblr-link{padding: 0.5em; text-decoration: none; font-size: larger; vertical-align: middle;}.next-page { display: flex; justify-content: center; padding: 1em; }.ao3 dl dt, .ao3 dl dd { display: inline; margin-left: 0}.ao3 blockquote { border: none; }%s</style>
 	<link rel="preconnect" href="https://64.media.tumblr.com/" />
@@ -440,23 +440,23 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 	}
 
 	wg.Wait()
-	successfulTumblrs := make([]Tumblr, 0, len(tumblrs))
-	for _, tumblr := range tumblrs {
-		if tumblr == nil {
+	successfulFeeds := make([]Feed, 0, len(feeds))
+	for _, feed := range feeds {
+		if feed == nil {
 			continue
 		}
-		successfulTumblrs = append(successfulTumblrs, tumblr)
+		successfulFeeds = append(successfulFeeds, feed)
 	}
-	tumblr = MergeTumblrs(successfulTumblrs...)
+	feed = MergeFeeds(successfulFeeds...)
 	if err != nil {
 		log.Println("open:", err)
-		fmt.Fprintf(w, `<code style="color: red; font-weight: bold; font-size: larger;">could not load tumblr: %s</code>`, err)
-		if tumblr == nil {
+		fmt.Fprintf(w, `<code style="color: red; font-weight: bold; font-size: larger;">could not load feed: %s</code>`, err)
+		if feed == nil {
 			return
 		}
 	}
 	defer func() {
-		err := tumblr.Close()
+		err := feed.Close()
 		if err != nil {
 			log.Printf("Error: closing %s: %s", settings.SelectedFeeds, err)
 		}
@@ -468,7 +468,7 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 	var lastPost *Post
 	nextPost := func() {
 		lastPost = post
-		post, err = tumblr.Next()
+		post, err = feed.Next()
 	}
 
 	if search.BeforeID != "" {
@@ -696,9 +696,9 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 
 	<input type="text" name="list" hidden value=%q />
 
-	<label for="tumblrs">Tumblrs to view by default</label>:
+	<label for="feeds">Feeds to view by default</label>:
 	<div class="field">
-		<textarea rows="%d" cols="30" name="tumblrs">%s</textarea>
+		<textarea rows="%d" cols="30" name="Feeds">%s</textarea>
 	</div>
 	<input type="submit" value="Save" />
 </form>
@@ -735,7 +735,7 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 	fmt.Fprintln(w, `</ul>
 </section>`)
 
-	fmt.Fprintf(w, `<hr /><footer>%d posts from %q (<a href=%q>source</a>) in %s (open: %s)</footer>`, postCount, tumblr.Name(), tumblr.URL(), time.Since(start).Round(time.Millisecond), openTime.Round(time.Millisecond))
+	fmt.Fprintf(w, `<hr /><footer>%d posts from %q (<a href=%q>source</a>) in %s (open: %s)</footer>`, postCount, feed.Name(), feed.URL(), time.Since(start).Round(time.Millisecond), openTime.Round(time.Millisecond))
 	if err != nil && !errors.Is(err, io.EOF) {
 		log.Println("decode:", err)
 	}
@@ -1023,7 +1023,7 @@ func SettingsFromRequest(req *http.Request) Settings {
 		if err != http.ErrNoCookie {
 			log.Printf("getting cookie: %s", err)
 		}
-		settings.SelectedFeeds = strings.Split(config.DefaultTumblr, ",")
+		settings.SelectedFeeds = strings.Split(config.DefaultFeed, ",")
 		return settings
 	}
 
@@ -1032,7 +1032,7 @@ func SettingsFromRequest(req *http.Request) Settings {
 		return settings
 	}
 
-	settings.SelectedFeeds = strings.Split(config.DefaultTumblr, ",")
+	settings.SelectedFeeds = strings.Split(config.DefaultFeed, ",")
 	return settings
 }
 
@@ -1305,19 +1305,19 @@ func filterAttributes(node *html.Node, keepAttrs ...string) {
 	node.Attr = attrs
 }
 
-func MergeTumblrs(tumblrs ...Tumblr) Tumblr {
-	return &tumblrMerger{tumblrs: tumblrs, posts: make([]*Post, len(tumblrs)), errors: make([]error, len(tumblrs))}
+func MergeFeeds(feeds ...Feed) Feed {
+	return &tumblrMerger{feeds: feeds, posts: make([]*Post, len(feeds)), errors: make([]error, len(feeds))}
 }
 
 type tumblrMerger struct {
-	tumblrs []Tumblr
-	posts   []*Post
-	errors  []error
+	feeds  []Feed
+	posts  []*Post
+	errors []error
 }
 
 func (tm *tumblrMerger) Name() string {
 	name := ""
-	for _, t := range tm.tumblrs {
+	for _, t := range tm.feeds {
 		name += " " + t.Name()
 	}
 	return name
@@ -1337,11 +1337,11 @@ func (tm *tumblrMerger) Next() (*Post, error) {
 	}
 
 	var wg sync.WaitGroup
-	wg.Add(len(tm.tumblrs))
-	for i := range tm.tumblrs {
+	wg.Add(len(tm.feeds))
+	for i := range tm.feeds {
 		go func(i int) {
 			if tm.posts[i] == nil && !errors.Is(tm.errors[i], io.EOF) {
-				tm.posts[i], tm.errors[i] = tm.tumblrs[i].Next()
+				tm.posts[i], tm.errors[i] = tm.feeds[i].Next()
 			}
 			wg.Done()
 		}(i)
@@ -1367,29 +1367,29 @@ func (tm *tumblrMerger) Next() (*Post, error) {
 	}
 
 	tm.posts[postIdx] = nil
-	firstPost.Author = tm.tumblrs[postIdx].Name()
+	firstPost.Author = tm.feeds[postIdx].Name()
 	return firstPost, nil
 }
 
 func (tm *tumblrMerger) Close() error {
 	var err error
-	for _, t := range tm.tumblrs {
+	for _, t := range tm.feeds {
 		err = t.Close()
 	}
 	return err
 }
 
-type Tumblr interface {
+type Feed interface {
 	Name() string
 	URL() string
 	Next() (*Post, error)
 	Close() error
 }
 
-type FeedFn func(name string, search Search) (Tumblr, error)
-type CacheFn func(name string, uncachedFn FeedFn, search Search) (Tumblr, error)
+type FeedFn func(name string, search Search) (Feed, error)
+type CacheFn func(name string, uncachedFn FeedFn, search Search) (Feed, error)
 
-func NewCachedFeed(name string, cacheFn CacheFn, search Search) (Tumblr, error) {
+func NewCachedFeed(name string, cacheFn CacheFn, search Search) (Feed, error) {
 	switch {
 	case strings.HasSuffix(name, "@twitter"):
 		return cacheFn(name, NewNitter, search)
@@ -1400,7 +1400,7 @@ func NewCachedFeed(name string, cacheFn CacheFn, search Search) (Tumblr, error) 
 	case strings.Contains(name, "@") || strings.Contains(name, "."):
 		return cacheFn(name, NewRSS, search)
 	default:
-		return cacheFn(name, func(name string, search Search) (Tumblr, error) {
+		return cacheFn(name, func(name string, search Search) (Feed, error) {
 			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 			go func() {
 				time.Sleep(1 * time.Second)
@@ -1411,30 +1411,30 @@ func NewCachedFeed(name string, cacheFn CacheFn, search Search) (Tumblr, error) 
 	}
 }
 
-func NewCachedTumblr(name string, uncachedFn FeedFn, search Search) (Tumblr, error) {
+func NewCached(name string, uncachedFn FeedFn, search Search) (Feed, error) {
 	cached, isCached := cache.Get(name)
-	if isCached && time.Since(cached.(*cachedTumblr).cachedAt) < CacheTime {
-		tumblr := *cached.(*cachedTumblr)
-		return &tumblr, nil
+	if isCached && time.Since(cached.(*cachedFeed).cachedAt) < CacheTime {
+		feed := *cached.(*cachedFeed)
+		return &feed, nil
 	}
-	tumblr, err := uncachedFn(name, search)
+	feed, err := uncachedFn(name, search)
 	if err != nil {
 		return nil, err
 	}
 	return &cachingTumblr{
-		uncached: tumblr,
-		cached: &cachedTumblr{
+		uncached: feed,
+		cached: &cachedFeed{
 			cachedAt: time.Now(),
 			name:     name,
-			url:      tumblr.URL(),
+			url:      feed.URL(),
 			posts:    make([]*Post, 0, 10),
 		},
 	}, nil
 }
 
 type cachingTumblr struct {
-	uncached Tumblr
-	cached   *cachedTumblr
+	uncached Feed
+	cached   *cachedFeed
 }
 
 func (ct *cachingTumblr) Name() string {
@@ -1459,22 +1459,22 @@ func (ct *cachingTumblr) Close() error {
 	return ct.uncached.Close()
 }
 
-type cachedTumblr struct {
+type cachedFeed struct {
 	cachedAt time.Time
 	name     string
 	url      string
 	posts    []*Post
 }
 
-func (ct *cachedTumblr) Name() string {
+func (ct *cachedFeed) Name() string {
 	return ct.name
 }
 
-func (ct *cachedTumblr) URL() string {
+func (ct *cachedFeed) URL() string {
 	return ct.url
 }
 
-func (ct *cachedTumblr) Next() (*Post, error) {
+func (ct *cachedFeed) Next() (*Post, error) {
 	if len(ct.posts) == 0 {
 		return nil, fmt.Errorf("no more posts: %w", io.EOF)
 	}
@@ -1484,6 +1484,6 @@ func (ct *cachedTumblr) Next() (*Post, error) {
 	return post, nil
 }
 
-func (ct *cachedTumblr) Close() error {
+func (ct *cachedFeed) Close() error {
 	return nil
 }
