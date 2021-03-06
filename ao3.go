@@ -192,7 +192,7 @@ func (ao3 *ao3) Next() (*Post, error) {
 		ID:              id,
 		URL:             postURL,
 		Title:           fmt.Sprintf("<h1><a href=%q>", postURL) + title.FirstChild.Data + "</a> by " + author.FirstChild.Data + "</h1>",
-		Author:          author.FirstChild.Data,
+		Author:          author.FirstChild.Data, // FIXME: cannot fetch from db because author != url?
 		DescriptionHTML: descriptionHTML.String(),
 		Tags:            tags,
 		DateString:      dateString,
