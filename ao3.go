@@ -18,6 +18,8 @@ var dateMatcher = cascadia.MustCompile(".datetime")
 var titleMatcher = cascadia.MustCompile(".header .heading a")
 var authorMatcher = cascadia.MustCompile(".header .heading a[rel=author]")
 var summaryMatcher = cascadia.MustCompile(".summary")
+var fandomTagsMatcher = cascadia.MustCompile(".fandoms a.tag")
+var requiredTagsMatcher = cascadia.MustCompile(".required-tags li span.text")
 var tagsMatcher = cascadia.MustCompile("ul.tags li .tag")
 
 type ao3 struct {
@@ -121,17 +123,18 @@ func (ao3 *ao3) Next() (*Post, error) {
 		return nil, fmt.Errorf("invalid date %q: %w", dateString, err)
 	}
 
-	summary := cascadia.Query(work, summaryMatcher)
-	if summary == nil {
-		return nil, fmt.Errorf("no summary")
-	}
-	// TODO: include common elements from ao3 summary (word count, tag groupings, stats)
 	descriptionHTML := new(bytes.Buffer)
-	for child := summary.FirstChild; child != nil; child = child.NextSibling {
+	for child := work.FirstChild; child != nil; child = child.NextSibling {
 		// skip whitespace
 		if child.Type == html.TextNode && strings.TrimSpace(child.Data) == "" {
 			continue
 		}
+
+		if child.Data == "div" || child.Data == "h6" || child.Data == "ul" {
+			continue
+		}
+
+		makeAbsoluteLinks(child, "https://archiveofourown.org")
 
 		err := html.Render(descriptionHTML, child)
 		if err != nil {
@@ -139,14 +142,45 @@ func (ao3 *ao3) Next() (*Post, error) {
 		}
 	}
 
+	fandomTagNodes := cascadia.QueryAll(work, fandomTagsMatcher)
+	if fandomTagNodes == nil || len(fandomTagNodes) == 0 {
+		return nil, fmt.Errorf("no fandom tags")
+	}
+	requiredTagNodes := cascadia.QueryAll(work, requiredTagsMatcher)
+	if requiredTagNodes == nil || len(requiredTagNodes) == 0 {
+		return nil, fmt.Errorf("no required tags")
+	}
 	tagNodes := cascadia.QueryAll(work, tagsMatcher)
 	if tagNodes == nil || len(tagNodes) == 0 {
 		return nil, fmt.Errorf("no tags")
 	}
-	tags := make([]string, 0, len(tagNodes))
+	tags := make([]string, 0, len(fandomTagNodes)+len(requiredTagNodes)+len(tagNodes))
+	for _, tagNode := range fandomTagNodes {
+		if tagNode.FirstChild == nil {
+			return nil, fmt.Errorf("invalid tag")
+		}
+
+		tags = append(tags, tagNode.FirstChild.Data)
+	}
+	seenTag := make(map[string]bool)
+	for _, tagNode := range requiredTagNodes {
+		if tagNode.FirstChild == nil {
+			return nil, fmt.Errorf("invalid tag")
+		}
+
+		for _, tag := range strings.Split(tagNode.FirstChild.Data, ", ") {
+			seenTag[tag] = true
+
+			tags = append(tags, tag)
+		}
+	}
 	for _, tagNode := range tagNodes {
 		if tagNode.FirstChild == nil {
 			return nil, fmt.Errorf("invalid tag")
+		}
+
+		if seenTag[tagNode.FirstChild.Data] {
+			continue
 		}
 
 		tags = append(tags, tagNode.FirstChild.Data)
@@ -164,6 +198,18 @@ func (ao3 *ao3) Next() (*Post, error) {
 		DateString:      dateString,
 		Date:            dateParsed.UTC(),
 	}, nil
+}
+
+func makeAbsoluteLinks(node *html.Node, baseURL string) {
+	for i, attr := range node.Attr {
+		if attr.Key == "href" && len(attr.Val) > 0 && attr.Val[0] == '/' {
+			node.Attr[i].Val = baseURL + attr.Val
+		}
+	}
+
+	for child := node.FirstChild; child != nil; child = child.NextSibling {
+		makeAbsoluteLinks(child, baseURL)
+	}
 }
 
 func (ao3 *ao3) Close() error {
