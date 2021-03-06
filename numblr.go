@@ -947,6 +947,7 @@ func parseSearch(req *http.Request) Search {
 		ExcludeTerms: make([]string, 0, 1),
 	}
 
+	// TODO: allow tags with spaces (#This is fun #Other tag)
 	for _, searchTerm := range searchTerms {
 		if searchTerm == "noreblog" {
 			search.NoReblogs = true
