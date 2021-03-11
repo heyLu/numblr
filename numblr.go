@@ -229,16 +229,16 @@ self.addEventListener('install', function(e) {
 
 		first := true
 		cookieValue := ""
-		for _, tumblr := range strings.Split(feeds, "\n") {
-			tumblr = strings.TrimSpace(tumblr)
-			if tumblr == "" {
+		for _, feed := range strings.Split(feeds, "\n") {
+			feed = strings.TrimSpace(feed)
+			if feed == "" {
 				continue
 			}
 			if !first {
 				cookieValue += ","
 			}
 			first = false
-			cookieValue += tumblr
+			cookieValue += feed
 		}
 
 		redirect := "/"
