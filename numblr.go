@@ -701,7 +701,7 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 
 	<label for="feeds">Feeds to view by default</label>:
 	<div class="field">
-		<textarea rows="%d" cols="30" name="Feeds">%s</textarea>
+		<textarea rows="%d" cols="30" name="feeds">%s</textarea>
 	</div>
 	<input type="submit" value="Save" />
 </form>
