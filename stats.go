@@ -15,6 +15,7 @@ type Stats struct {
 	// mu protects all fields.
 	mu sync.Mutex
 
+	NumViews  int
 	NumFeeds  int
 	NumPosts  int
 	CacheSize int64
@@ -76,6 +77,16 @@ func EnableDatabaseStats(db *sql.DB, path string) {
 	}()
 }
 
+func CountView() {
+	if globalStats == nil {
+		return
+	}
+
+	globalStats.mu.Lock()
+	globalStats.NumViews++
+	globalStats.mu.Unlock()
+}
+
 func CollectError(err error) {
 	if globalStats == nil {
 		return
@@ -125,6 +136,7 @@ func StatsHandler(w http.ResponseWriter, req *http.Request) {
 	fmt.Fprintf(w, "feeds: %d\n", globalStats.NumFeeds)
 	fmt.Fprintf(w, "posts: %d\n", globalStats.NumPosts)
 	fmt.Fprintf(w, "cache: %s\n", Bytes(globalStats.CacheSize))
+	fmt.Fprintf(w, "views: %d\n", globalStats.NumViews)
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "recent errors:")
 	for _, err := range globalStats.RecentErrors {

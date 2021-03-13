@@ -379,6 +379,7 @@ func strictTransportSecurity(next http.Handler) http.Handler {
 func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 	start := time.Now()
 
+	go CountView()
 	go CollectUser(req.Header.Get("User-Agent"))
 
 	if req.URL.Query().Get("feed") != "" {
