@@ -66,6 +66,8 @@ var config struct {
 	DefaultFeed string
 
 	AppDisplayMode string
+
+	CollectStats bool
 }
 
 const CacheTime = 10 * time.Minute
@@ -94,6 +96,7 @@ func main() {
 	flag.StringVar(&config.DatabasePath, "db", "", "Database path to use")
 	flag.StringVar(&config.DefaultFeed, "default", "staff,engineering", "Default feeds to view")
 	flag.StringVar(&config.AppDisplayMode, "app-display", "browser", "Display mode to use when installed as an app")
+	flag.BoolVar(&config.CollectStats, "stats", false, "Whether to collect anonymized stats (num cached feeds & posts, recent errors & user agents")
 	flag.StringVar(&NitterURL, "nitter-url", "https://nitter.net", "Nitter instance to use")
 	flag.Parse()
 
@@ -108,6 +111,10 @@ func main() {
 
 		cacheFn = func(name string, uncachedFn FeedFn, search Search) (Feed, error) {
 			return NewDatabaseCached(db, name, uncachedFn, search)
+		}
+
+		if config.CollectStats {
+			EnableDatabaseStats(db, config.DatabasePath)
 		}
 
 		go func() {
@@ -176,6 +183,10 @@ func main() {
 	router.Use(strictTransportSecurity)
 
 	// TODO: implement stats (db size, # posts, # feeds, requests / user agents?)
+	router.Handle("/stats", http.HandlerFunc(StatsHandler))
+	if config.CollectStats {
+		EnableStats(20, 20)
+	}
 
 	router.HandleFunc("/favicon.png", func(w http.ResponseWriter, req *http.Request) {
 		w.Header().Set("Content-Type", "image/png")
@@ -350,6 +361,8 @@ func strictTransportSecurity(next http.Handler) http.Handler {
 func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 	start := time.Now()
 
+	go CollectUser(req.Header.Get("User-Agent"))
+
 	if req.URL.Query().Get("feed") != "" {
 		feed := req.URL.Query().Get("feed")
 		if strings.ContainsAny(feed, "#?") {
@@ -452,6 +465,7 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 	}
 	feed = MergeFeeds(successfulFeeds...)
 	if err != nil {
+		go CollectError(err)
 		log.Println("open:", err)
 		fmt.Fprintf(w, `<code style="color: red; font-weight: bold; font-size: larger;">could not load feed: %s</code>`, err)
 		if feed == nil {
