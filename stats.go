@@ -152,6 +152,6 @@ func (b Bytes) String() string {
 	case b > 1024:
 		return fmt.Sprintf("%dkb", b/1024)
 	default:
-		return fmt.Sprintf("%db")
+		return fmt.Sprintf("%db", b)
 	}
 }
