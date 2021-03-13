@@ -58,6 +58,7 @@ var videoRE = regexp.MustCompile(`<video `)
 var autoplayRE = regexp.MustCompile(` autoplay="autoplay"`)
 
 const CookieName = "numbl"
+const UserAgent = "numblr"
 
 var config struct {
 	Addr         string
@@ -91,6 +92,16 @@ var httpClient = &http.Client{
 	},
 }
 
+type userAgentTransport struct {
+	UserAgent string
+	Transport http.RoundTripper
+}
+
+func (uat *userAgentTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	req.Header.Set("User-Agent", uat.UserAgent)
+	return uat.Transport.RoundTrip(req)
+}
+
 func main() {
 	flag.StringVar(&config.Addr, "addr", "localhost:5555", "Address to listen on")
 	flag.StringVar(&config.DatabasePath, "db", "", "Database path to use")
@@ -101,6 +112,10 @@ func main() {
 	flag.Parse()
 
 	http.DefaultClient.Timeout = 10 * time.Second
+	http.DefaultClient.Transport = &userAgentTransport{
+		UserAgent: UserAgent,
+		Transport: http.DefaultTransport,
+	}
 
 	// TODO: unify in-memory cache and database into a pluggable interface
 	if config.DatabasePath != "" {
