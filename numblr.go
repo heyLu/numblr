@@ -188,6 +188,9 @@ func main() {
 		EnableStats(20, 20)
 	}
 
+	router.HandleFunc("/favicon.ico", func(w http.ResponseWriter, req *http.Request) {
+		http.Redirect(w, req, "/favicon.png", http.StatusPermanentRedirect)
+	})
 	router.HandleFunc("/favicon.png", func(w http.ResponseWriter, req *http.Request) {
 		w.Header().Set("Content-Type", "image/png")
 		w.Write(FaviconPNGBytes)
