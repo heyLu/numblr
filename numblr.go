@@ -251,6 +251,8 @@ self.addEventListener('install', function(e) {
 `)
 	})
 
+	// TODO: implement a follow button (first only for generic feed, either add to cookie or url, depending on context)
+
 	router.HandleFunc("/settings", func(w http.ResponseWriter, req *http.Request) {
 		list := req.FormValue("list")
 		feeds := req.FormValue("feeds")
