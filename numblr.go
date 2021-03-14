@@ -197,7 +197,6 @@ func main() {
 	router.Use(gziphandler.GzipHandler)
 	router.Use(strictTransportSecurity)
 
-	// TODO: implement stats (db size, # posts, # feeds, requests / user agents?)
 	router.Handle("/stats", http.HandlerFunc(StatsHandler))
 	if config.CollectStats {
 		EnableStats(20, 20)
