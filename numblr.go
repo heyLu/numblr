@@ -125,8 +125,8 @@ func main() {
 			log.Fatalf("setup database: %s", err)
 		}
 
-		cacheFn = func(name string, uncachedFn FeedFn, search Search) (Feed, error) {
-			return NewDatabaseCached(db, name, uncachedFn, search)
+		cacheFn = func(ctx context.Context, name string, uncachedFn FeedFn, search Search) (Feed, error) {
+			return NewDatabaseCached(ctx, db, name, uncachedFn, search)
 		}
 
 		if config.CollectStats {
@@ -145,7 +145,10 @@ func main() {
 
 				for _, feedName := range feeds {
 					func(feedName string) {
-						feed, err := NewCachedFeed(feedName, cacheFn, Search{})
+						ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+						defer cancel()
+
+						feed, err := NewCachedFeed(ctx, feedName, cacheFn, Search{})
 						if err != nil {
 							log.Printf("Error: background refresh: opening feed: %s", err)
 							return
@@ -410,7 +413,7 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 			}
 
 			var openErr error
-			feeds[i], openErr = NewCachedFeed(settings.SelectedFeeds[i], cacheFn, search)
+			feeds[i], openErr = NewCachedFeed(req.Context(), settings.SelectedFeeds[i], cacheFn, search)
 			if openErr != nil {
 				err = fmt.Errorf("%s: %w", settings.SelectedFeeds[i], openErr)
 			}
@@ -1425,22 +1428,23 @@ type Feed interface {
 	Close() error
 }
 
-type FeedFn func(name string, search Search) (Feed, error)
-type CacheFn func(name string, uncachedFn FeedFn, search Search) (Feed, error)
+type FeedFn func(ctx context.Context, name string, search Search) (Feed, error)
+type CacheFn func(ctx context.Context, name string, uncachedFn FeedFn, search Search) (Feed, error)
 
-func NewCachedFeed(name string, cacheFn CacheFn, search Search) (Feed, error) {
+func NewCachedFeed(ctx context.Context, name string, cacheFn CacheFn, search Search) (Feed, error) {
 	switch {
 	case strings.HasSuffix(name, "@twitter"):
-		return cacheFn(name, NewNitter, search)
+		return cacheFn(ctx, name, NewNitter, search)
 	case strings.HasSuffix(name, "@instagram"):
-		return cacheFn(name, NewBibliogram, search)
+		return cacheFn(ctx, name, NewBibliogram, search)
 	case strings.Contains(name, "archiveofourown.org"):
-		return cacheFn(name, NewAO3, search)
+		return cacheFn(ctx, name, NewAO3, search)
 	case strings.Contains(name, "@") || strings.Contains(name, "."):
-		return cacheFn(name, NewRSS, search)
+		return cacheFn(ctx, name, NewRSS, search)
 	default:
-		return cacheFn(name, func(name string, search Search) (Feed, error) {
-			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+		return cacheFn(ctx, name, func(ctx context.Context, name string, search Search) (Feed, error) {
+			// TODO: use cached version if request takes too long unless cached version does not exist
+			ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
 			go func() {
 				time.Sleep(1 * time.Second)
 				cancel()
@@ -1450,13 +1454,13 @@ func NewCachedFeed(name string, cacheFn CacheFn, search Search) (Feed, error) {
 	}
 }
 
-func NewCached(name string, uncachedFn FeedFn, search Search) (Feed, error) {
+func NewCached(ctx context.Context, name string, uncachedFn FeedFn, search Search) (Feed, error) {
 	cached, isCached := cache.Get(name)
 	if isCached && time.Since(cached.(*cachedFeed).cachedAt) < CacheTime {
 		feed := *cached.(*cachedFeed)
 		return &feed, nil
 	}
-	feed, err := uncachedFn(name, search)
+	feed, err := uncachedFn(ctx, name, search)
 	if err != nil {
 		return nil, err
 	}

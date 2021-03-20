@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net/url"
 	"strings"
@@ -13,14 +14,14 @@ var NitterURL = "https://nitter.net"
 // NewNitter creates a new feed for Twitter, via Nitter.
 //
 // See https://github.com/zedeus/nitter.
-func NewNitter(name string, search Search) (Feed, error) {
+func NewNitter(ctx context.Context, name string, search Search) (Feed, error) {
 	nameIdx := strings.Index(name, "@")
 	rssURL := fmt.Sprintf("%s/%s/rss", NitterURL, name[:nameIdx])
 	if strings.HasPrefix(name[:nameIdx], "#") {
 		rssURL = fmt.Sprintf("%s/search?q=%s", NitterURL, url.QueryEscape(name[:nameIdx]))
 	}
 
-	feed, err := NewRSS(rssURL, search)
+	feed, err := NewRSS(ctx, rssURL, search)
 	if err != nil {
 		return nil, err
 	}

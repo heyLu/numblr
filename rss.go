@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -16,7 +17,7 @@ import (
 
 var RelAlternateMatcher = cascadia.MustCompile(`link[rel=alternate]`)
 
-func NewRSS(name string, _ Search) (Feed, error) {
+func NewRSS(_ context.Context, name string, _ Search) (Feed, error) {
 	feedURL := name
 	if strings.Contains(name, "@") {
 		parts := strings.SplitN(name, "@", 2)

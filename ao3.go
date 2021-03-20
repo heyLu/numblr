@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -28,7 +29,7 @@ type ao3 struct {
 	works []*html.Node
 }
 
-func NewAO3(name string, _ Search) (Feed, error) {
+func NewAO3(_ context.Context, name string, _ Search) (Feed, error) {
 	// TODO: implement author@ao3
 	// TODO: implement ao3 search
 

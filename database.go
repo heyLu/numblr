@@ -66,8 +66,8 @@ func ListFeedsOlderThan(ctx context.Context, db *sql.DB, olderThan time.Time) ([
 	return feeds, nil
 }
 
-func NewDatabaseCached(db *sql.DB, name string, uncachedFn FeedFn, search Search) (Feed, error) {
-	tx, err := db.BeginTx(context.Background(), &sql.TxOptions{ReadOnly: true})
+func NewDatabaseCached(ctx context.Context, db *sql.DB, name string, uncachedFn FeedFn, search Search) (Feed, error) {
+	tx, err := db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
 		return nil, fmt.Errorf("begin tx: %w", err)
 	}
@@ -100,7 +100,7 @@ func NewDatabaseCached(db *sql.DB, name string, uncachedFn FeedFn, search Search
 	// close readonly tx, open new one later when saving
 	tx.Rollback()
 
-	feed, err := uncachedFn(name, search)
+	feed, err := uncachedFn(ctx, name, search)
 	if err != nil {
 		return nil, fmt.Errorf("open uncached: %w", err)
 	}
