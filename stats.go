@@ -22,11 +22,11 @@ type Stats struct {
 
 	RecentErrors []string
 	lastError    int
-	seenError    map[string]bool
+	seenError    map[string]int
 
 	RecentUsers []string
 	lastUser    int
-	seenUser    map[string]bool
+	seenUser    map[string]int
 }
 
 var globalStats *Stats = nil
@@ -34,9 +34,9 @@ var globalStats *Stats = nil
 func EnableStats(numErrors int, numUsers int) {
 	globalStats = &Stats{}
 	globalStats.RecentErrors = make([]string, numErrors)
-	globalStats.seenError = make(map[string]bool, numUsers)
+	globalStats.seenError = make(map[string]int, numUsers)
 	globalStats.RecentUsers = make([]string, numUsers)
-	globalStats.seenUser = make(map[string]bool, numUsers)
+	globalStats.seenUser = make(map[string]int, numUsers)
 }
 
 func EnableDatabaseStats(db *sql.DB, path string) {
@@ -100,10 +100,11 @@ func CollectError(err error) {
 
 	globalStats.mu.Lock()
 	defer globalStats.mu.Unlock()
-	if globalStats.seenError[s] {
+	if globalStats.seenError[s] > 0 {
+		globalStats.seenError[s]++
 		return
 	}
-	globalStats.seenError[s] = true
+	globalStats.seenError[s]++
 	oldestError := (globalStats.lastError + 1) % len(globalStats.RecentErrors)
 	delete(globalStats.seenError, globalStats.RecentErrors[oldestError])
 	globalStats.RecentErrors[globalStats.lastError%len(globalStats.RecentErrors)] = s
@@ -117,10 +118,11 @@ func CollectUser(s string) {
 
 	globalStats.mu.Lock()
 	defer globalStats.mu.Unlock()
-	if globalStats.seenUser[s] {
+	if globalStats.seenUser[s] > 0 {
+		globalStats.seenUser[s]++
 		return
 	}
-	globalStats.seenUser[s] = true
+	globalStats.seenUser[s]++
 	oldestUser := (globalStats.lastUser + 1) % len(globalStats.RecentUsers)
 	delete(globalStats.seenUser, globalStats.RecentUsers[oldestUser])
 	globalStats.RecentUsers[globalStats.lastUser%len(globalStats.RecentUsers)] = s
@@ -141,14 +143,14 @@ func StatsHandler(w http.ResponseWriter, req *http.Request) {
 	fmt.Fprintln(w, "recent errors:")
 	for _, err := range globalStats.RecentErrors {
 		if err != "" {
-			fmt.Fprintln(w, "  ", err)
+			fmt.Fprintf(w, "  %s (%d)\n", err, globalStats.seenError[err])
 		}
 	}
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "recent users:")
 	for _, user := range globalStats.RecentUsers {
 		if user != "" {
-			fmt.Fprintln(w, " ", user)
+			fmt.Fprintf(w, "  %s (%d)\n", user, globalStats.seenUser[user])
 		}
 	}
 }
