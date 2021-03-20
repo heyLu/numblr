@@ -109,6 +109,7 @@ func main() {
 	flag.StringVar(&config.AppDisplayMode, "app-display", "browser", "Display mode to use when installed as an app")
 	flag.BoolVar(&config.CollectStats, "stats", false, "Whether to collect anonymized stats (num cached feeds & posts, recent errors & user agents")
 	flag.StringVar(&NitterURL, "nitter-url", "https://nitter.net", "Nitter instance to use")
+	flag.StringVar(&BibliogramInstancesURL, "bibliogram-instances-url", BibliogramInstancesURL, "The bibliogram url to use to fetch possible instances from")
 	flag.Parse()
 
 	http.DefaultClient.Timeout = 10 * time.Second

@@ -12,6 +12,8 @@ import (
 	"time"
 )
 
+var BibliogramInstancesURL = "https://bibliogram.snopyta.org/api/instances"
+
 var bibliogramInstances []string
 var bibliogramInitialized bool
 
@@ -107,7 +109,7 @@ func (br bibliogramRSS) Next() (*Post, error) {
 }
 
 func initBibliogram() ([]string, error) {
-	resp, err := http.Get("https://bibliogram.art/api/instances")
+	resp, err := http.Get(BibliogramInstancesURL)
 	if err != nil {
 		return nil, fmt.Errorf("get: %w", err)
 	}
