@@ -662,6 +662,7 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 				return fmt.Sprintf(`<a %shref=%q%s>%s</a>`, parts[1], "/"+parts[3], parts[2], "@"+parts[3])
 			})
 			postHTML = tumblrLinksRE.ReplaceAllStringFunc(postHTML, tumblrToInternal)
+			postHTML = strings.Replace(postHTML, "https://href.li/?", "", -1)
 			postHTML = instagramLinksRE.ReplaceAllStringFunc(postHTML, func(repl string) string {
 				parts := instagramLinksRE.FindStringSubmatch(repl)
 				if len(parts) != 3 {
