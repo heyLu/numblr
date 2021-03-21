@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -8,7 +9,7 @@ import (
 )
 
 func TestAO3AuthorFandomFeed(t *testing.T) {
-	feed, err := NewAO3("https://archiveofourown.org/users/astolat/works?fandom_id=136512", Search{})
+	feed, err := NewAO3(context.Background(), "https://archiveofourown.org/users/astolat/works?fandom_id=136512", Search{})
 	assert.NoError(t, err, "new")
 
 	assert.Len(t, feed.(*ao3).works, 20)
