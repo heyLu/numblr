@@ -17,7 +17,7 @@ import (
 
 var RelAlternateMatcher = cascadia.MustCompile(`link[rel=alternate]`)
 
-func NewRSS(_ context.Context, name string, _ Search) (Feed, error) {
+func NewRSS(ctx context.Context, name string, _ Search) (Feed, error) {
 	feedURL := name
 	if strings.Contains(name, "@") {
 		parts := strings.SplitN(name, "@", 2)
@@ -36,7 +36,11 @@ func NewRSS(_ context.Context, name string, _ Search) (Feed, error) {
 		return nil, fmt.Errorf("invalid url %q: %w", feedURL, err)
 	}
 
-	resp, err := http.Get(feedURL)
+	req, err := http.NewRequestWithContext(ctx, "GET", feedURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("new request: %w", err)
+	}
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("open: %w", err)
 	}
