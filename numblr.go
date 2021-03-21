@@ -1442,15 +1442,7 @@ func NewCachedFeed(ctx context.Context, name string, cacheFn CacheFn, search Sea
 	case strings.Contains(name, "@") || strings.Contains(name, "."):
 		return cacheFn(ctx, name, NewRSS, search)
 	default:
-		return cacheFn(ctx, name, func(ctx context.Context, name string, search Search) (Feed, error) {
-			// TODO: use cached version if request takes too long unless cached version does not exist
-			ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
-			go func() {
-				time.Sleep(1 * time.Second)
-				cancel()
-			}()
-			return NewTumblrRSS(ctx, name, search)
-		}, search)
+		return cacheFn(ctx, name, NewTumblrRSS, search)
 	}
 }
 

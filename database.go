@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"time"
@@ -72,7 +73,7 @@ func NewDatabaseCached(ctx context.Context, db *sql.DB, name string, uncachedFn 
 		return nil, fmt.Errorf("begin tx: %w", err)
 	}
 
-	row := tx.QueryRow("SELECT cached_at, url FROM feed_infos WHERE name = ?", name)
+	row := tx.QueryRowContext(ctx, "SELECT cached_at, url FROM feed_infos WHERE name = ?", name)
 	var cachedAt time.Time
 	var url string
 	err = row.Scan(&cachedAt, &url)
@@ -85,23 +86,49 @@ func NewDatabaseCached(ctx context.Context, db *sql.DB, name string, uncachedFn 
 	if isCached && time.Since(cachedAt) < CacheTime {
 		var rows *sql.Rows
 		if search.BeforeID != "" {
-			rows, err = tx.Query("SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? AND id < ? ORDER BY date DESC LIMIT 20", name, search.BeforeID)
+			rows, err = tx.QueryContext(ctx, "SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? AND id < ? ORDER BY date DESC LIMIT 20", name, search.BeforeID)
 		} else {
-			rows, err = tx.Query("SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? ORDER BY date DESC LIMIT 20", name)
+			rows, err = tx.QueryContext(ctx, "SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? ORDER BY date DESC LIMIT 20", name)
 		}
 		if err != nil {
 			tx.Rollback()
 			return nil, fmt.Errorf("querying posts: %w", err)
 		}
 
-		return &databaseCached{name: name, url: url, rows: rows, tx: tx}, nil
+		return &databaseCached{name: name, url: url, rows: rows}, nil
 	}
 
 	// close readonly tx, open new one later when saving
 	tx.Rollback()
 
-	feed, err := uncachedFn(ctx, name, search)
+	cancel := func() {}
+
+	_, hasTimeout := ctx.Deadline()
+	timedCtx := ctx
+	if !hasTimeout && isCached {
+		// if we have the feed cached and the uncached one took too long, return the cached one
+		timedCtx, cancel = context.WithTimeout(ctx, 100*time.Millisecond)
+		defer cancel()
+	}
+
+	feed, err := uncachedFn(timedCtx, name, search)
 	if err != nil {
+		if isCached && timedCtx.Err() != nil && errors.Is(err, context.DeadlineExceeded) {
+			var rows *sql.Rows
+			var err error
+			if search.BeforeID != "" {
+				rows, err = db.QueryContext(ctx, "SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? AND id < ? ORDER BY date DESC LIMIT 20", name, search.BeforeID)
+			} else {
+				rows, err = db.QueryContext(ctx, "SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? ORDER BY date DESC LIMIT 20", name)
+			}
+			if err != nil {
+				tx.Rollback()
+				return nil, fmt.Errorf("querying posts: %w", err)
+			}
+
+			return &databaseCached{name: name, url: url, outOfDate: true, rows: rows}, nil
+		}
+
 		return nil, fmt.Errorf("open uncached: %w", err)
 	}
 	return &databaseCaching{
@@ -214,11 +241,11 @@ func (ct *databaseCaching) Save() error {
 }
 
 type databaseCached struct {
-	cachedAt time.Time
-	name     string
-	url      string
-	rows     *sql.Rows
-	tx       *sql.Tx
+	cachedAt  time.Time
+	name      string
+	url       string
+	outOfDate bool
+	rows      *sql.Rows
 }
 
 func (dc *databaseCached) Name() string {
@@ -250,15 +277,13 @@ func (dc *databaseCached) Next() (*Post, error) {
 		return nil, fmt.Errorf("decode tags: %w", err)
 	}
 
+	if dc.outOfDate {
+		post.Tags = append(post.Tags, "numblr:out-of-date")
+	}
+
 	return &post, nil
 }
 
 func (dc *databaseCached) Close() error {
-	if dc.tx != nil {
-		err := dc.tx.Rollback()
-		if err != nil {
-			fmt.Printf("close tx: %s\n", err)
-		}
-	}
 	return dc.rows.Close()
 }
