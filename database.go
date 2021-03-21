@@ -146,6 +146,10 @@ func (ct *databaseCaching) Close() error {
 }
 
 func (ct *databaseCaching) Save() error {
+	if len(ct.posts) == 0 {
+		return nil
+	}
+
 	tx, err := ct.db.BeginTx(context.Background(), &sql.TxOptions{ReadOnly: false})
 	if err != nil {
 		return fmt.Errorf("begin tx: %w", err)
