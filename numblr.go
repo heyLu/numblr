@@ -150,14 +150,14 @@ func main() {
 
 						feed, err := NewCachedFeed(ctx, feedName, cacheFn, Search{})
 						if err != nil {
-							log.Printf("Error: background refresh: opening feed: %s", err)
+							log.Printf("Error: background refresh: opening %s: %s", feedName, err)
 							return
 						}
 						maxConcurrentFeeds <- true
 						defer func() {
 							err := feed.Close()
 							if err != nil {
-								log.Printf("Error: background refresh: closing feed: %s", err)
+								log.Printf("Error: background refresh: closing %s: %s", feedName, err)
 							}
 							<-maxConcurrentFeeds
 						}()
@@ -168,7 +168,7 @@ func main() {
 						}
 
 						if err != nil && !errors.Is(err, io.EOF) {
-							log.Printf("Error: background refresh: iterating feed: %s", err)
+							log.Printf("Error: background refresh: iterating %s: %s", feedName, err)
 							return
 						}
 					}(feedName)
