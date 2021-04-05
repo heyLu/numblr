@@ -113,7 +113,7 @@ func NewDatabaseCached(ctx context.Context, db *sql.DB, name string, uncachedFn 
 
 	feed, err := uncachedFn(timedCtx, name, search)
 	if err != nil {
-		if isCached && timedCtx.Err() != nil && errors.Is(err, context.DeadlineExceeded) {
+		if isCached && timedCtx.Err() != nil && (errors.Is(timedCtx.Err(), context.DeadlineExceeded) || isTimeoutError(err)) {
 			var rows *sql.Rows
 			var err error
 			if search.BeforeID != "" {
@@ -137,6 +137,18 @@ func NewDatabaseCached(ctx context.Context, db *sql.DB, name string, uncachedFn 
 		cachedAt: time.Now(),
 		posts:    make([]*Post, 0, 10),
 	}, nil
+}
+
+func isTimeoutError(err error) bool {
+	te, hasTimeout := err.(timeoutError)
+	if !hasTimeout {
+		return false
+	}
+	return te.Timeout()
+}
+
+type timeoutError interface {
+	Timeout() bool
 }
 
 type databaseCaching struct {
