@@ -705,11 +705,12 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 				}
 				fmt.Fprintln(w, `</ul>`)
 			}
-			fmt.Fprintf(w, `<time title="%s" datetime="%s">%s ago</time>, `, post.Date, post.DateString, prettyDuration(time.Since(post.Date)))
+			fmt.Fprintf(w, `<time title="%s" datetime="%s">%s ago</time> `, post.Date, post.DateString, prettyDuration(time.Since(post.Date)))
+			fmt.Fprintf(w, `by <a href=%q>%s</a>, `, "/"+post.Author, post.Author)
 			if post.Source == "tumblr" {
-				fmt.Fprintf(w, `<a href=%q>link</a> <a class="tumblr-link" href=%q>t</a>`, tumblrToInternal(post.URL), post.URL)
+				fmt.Fprintf(w, `<a href=%q title="link to just this post">post</a> <a class="tumblr-link" href=%q>t</a>`, tumblrToInternal(post.URL), post.URL)
 			} else {
-				fmt.Fprintf(w, `<a href=%q>link</a>`, post.URL)
+				fmt.Fprintf(w, `<a href=%q title="link to just this post">post</a>`, post.URL)
 			}
 			fmt.Fprint(w, "</footer>")
 			fmt.Fprintln(w, "</article>")
