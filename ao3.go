@@ -29,7 +29,7 @@ type ao3 struct {
 	works []*html.Node
 }
 
-func NewAO3(_ context.Context, name string, _ Search) (Feed, error) {
+func NewAO3(ctx context.Context, name string, _ Search) (Feed, error) {
 	// TODO: implement author@ao3
 	// TODO: implement ao3 search
 
@@ -54,7 +54,11 @@ func NewAO3(_ context.Context, name string, _ Search) (Feed, error) {
 		return nil, fmt.Errorf("unescape %q: %w", u.String(), err)
 	}
 
-	resp, err := http.Get(u.String())
+	req, err := http.NewRequestWithContext(ctx, "GET", u.String(), nil)
+	if err != nil {
+		return nil, fmt.Errorf("new request: %w", err)
+	}
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("fetching %q: %w", name, err)
 	}

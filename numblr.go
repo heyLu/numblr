@@ -347,7 +347,12 @@ func HandleAvatar(w http.ResponseWriter, req *http.Request) {
 		avatarURL = fmt.Sprintf("https://api.tumblr.com/v2/blog/%s.tumblr.com/avatar/%d", url.PathEscape(tumblr), AvatarSize)
 	}
 
-	resp, err := http.Get(avatarURL)
+	req, err := http.NewRequestWithContext(req.Context(), "GET", avatarURL, nil)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error: fetching avatar: could not create request: %s", err), http.StatusInternalServerError)
+		return
+	}
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Error: fetching avatar: %s", err), http.StatusInternalServerError)
 		return
@@ -1111,7 +1116,12 @@ func HandlePost(w http.ResponseWriter, req *http.Request) {
 	if slug != "" {
 		slug = "/" + slug
 	}
-	resp, err := http.Get(fmt.Sprintf("https://%s.tumblr.com/post/%s%s", tumblr, postId, slug))
+	req, err := http.NewRequestWithContext(req.Context(), "GET", fmt.Sprintf("https://%s.tumblr.com/post/%s%s", tumblr, postId, slug), nil)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error: could not create request: %s", err), http.StatusInternalServerError)
+		return
+	}
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Error: could not fetch post: %s", err), http.StatusInternalServerError)
 		return
@@ -1161,7 +1171,7 @@ func HandlePost(w http.ResponseWriter, req *http.Request) {
 				case "iframe":
 					for _, attr := range child.Attr {
 						if attr.Key == "src" && strings.Contains(attr.Val, "/photoset_iframe/") {
-							photosetImages, err := fetchPhotoset(tumblr, attr.Val)
+							photosetImages, err := fetchPhotoset(req.Context(), tumblr, attr.Val)
 							if err != nil {
 								log.Printf("Error: Invalid photoset %q: %s", attr.Val, err)
 								break
@@ -1279,7 +1289,7 @@ func HandlePost(w http.ResponseWriter, req *http.Request) {
 	f(node)
 }
 
-func fetchPhotoset(tumblr string, photosetPath string) ([]*html.Node, error) {
+func fetchPhotoset(ctx context.Context, tumblr string, photosetPath string) ([]*html.Node, error) {
 	u, err := url.Parse(photosetPath)
 	if err != nil {
 		return nil, fmt.Errorf("invalid url: %w", err)
@@ -1288,7 +1298,11 @@ func fetchPhotoset(tumblr string, photosetPath string) ([]*html.Node, error) {
 	u.Host = tumblr + ".tumblr.com"
 	u.Path = strings.Replace(u.Path, "/0/", "/512/", 1)
 
-	resp, err := http.Get(u.String())
+	req, err := http.NewRequestWithContext(ctx, "GET", u.String(), nil)
+	if err != nil {
+		return nil, fmt.Errorf("new request: %w", err)
+	}
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("fetch: %w", err)
 	}

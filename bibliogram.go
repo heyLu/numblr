@@ -25,10 +25,10 @@ func init() {
 // NewBibliogram creates a new feed for Instagram, via Bibliogram.
 //
 // See https://git.sr.ht/~cadence/bibliogram.
-func NewBibliogram(_ context.Context, name string, _ Search) (Feed, error) {
+func NewBibliogram(ctx context.Context, name string, _ Search) (Feed, error) {
 	if !bibliogramInitialized {
 		var err error
-		bibliogramInstances, err = initBibliogram()
+		bibliogramInstances, err = initBibliogram(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("initializing bibliogram: %w", err)
 		}
@@ -43,7 +43,11 @@ func NewBibliogram(_ context.Context, name string, _ Search) (Feed, error) {
 
 	for attempts := 0; attempts < len(bibliogramInstances); attempts++ {
 		rssURL = bibliogramInstances[rand.Intn(len(bibliogramInstances))] + fmt.Sprintf("/u/%s/rss.xml", url.PathEscape(name[:nameIdx]))
-		resp, err = http.Get(rssURL)
+		req, err := http.NewRequestWithContext(ctx, "GET", rssURL, nil)
+		if err != nil {
+			return nil, fmt.Errorf("new request: %w", err)
+		}
+		resp, err = http.DefaultClient.Do(req)
 		if err != nil {
 			err = fmt.Errorf("download %q: %w", name, err)
 			continue
@@ -109,8 +113,12 @@ func (br bibliogramRSS) Next() (*Post, error) {
 	return post, err
 }
 
-func initBibliogram() ([]string, error) {
-	resp, err := http.Get(BibliogramInstancesURL)
+func initBibliogram(ctx context.Context) ([]string, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", BibliogramInstancesURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("new request: %w", err)
+	}
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("get: %w", err)
 	}
