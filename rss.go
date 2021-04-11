@@ -90,7 +90,12 @@ func NewRSS(ctx context.Context, name string, _ Search) (Feed, error) {
 			return nil, fmt.Errorf("invalid feed url %q: %w", url, err)
 		}
 
-		resp, err := http.Get(feedURL.String())
+		req, err := http.NewRequestWithContext(ctx, "GET", feedURL.String(), nil)
+		if err != nil {
+			return nil, fmt.Errorf("new request: %w", err)
+		}
+
+		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
 			return nil, fmt.Errorf("open feed: %w", err)
 		}
