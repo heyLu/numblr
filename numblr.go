@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"path"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -406,12 +407,19 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 
 	var feed Feed
 	var err error
+	var feedTimingsMu sync.Mutex
+	feedTimings := make(map[string]time.Duration, len(settings.SelectedFeeds))
 	feeds := make([]Feed, len(settings.SelectedFeeds))
 	var wg sync.WaitGroup
 	wg.Add(len(settings.SelectedFeeds))
 	for i := range settings.SelectedFeeds {
 		go func(i int) {
-			defer wg.Done()
+			defer func() {
+				wg.Done()
+				feedTimingsMu.Lock()
+				feedTimings[settings.SelectedFeeds[i]] = time.Since(start)
+				feedTimingsMu.Unlock()
+			}()
 
 			if strings.HasPrefix(settings.SelectedFeeds[i], ":") {
 				return
@@ -784,6 +792,18 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 </section>`)
 
 	fmt.Fprintf(w, `<hr /><footer>%d posts from %q (<a href=%q>source</a>) in %s (open: %s)</footer>`, postCount, feed.Name(), feed.URL(), time.Since(start).Round(time.Millisecond), openTime.Round(time.Millisecond))
+
+	feedsByTime := make([]string, 0, len(feedTimings))
+	for feed := range feedTimings {
+		feedsByTime = append(feedsByTime, feed)
+	}
+	sort.Sort(sort.Reverse(sortByFunc{strings: feedsByTime, lessFn: func(a, b string) bool { return feedTimings[a] < feedTimings[b] }}))
+	fmt.Fprintln(w, `<details><summary>Performance details</summary><ol>`)
+	for _, feed := range feedsByTime {
+		fmt.Fprintf(w, `<li>%s (%s)</li>`, feed, feedTimings[feed])
+	}
+	fmt.Fprintln(w, `</ol></details>`)
+
 	if err != nil && !errors.Is(err, io.EOF) {
 		log.Println("decode:", err)
 	}
@@ -1542,3 +1562,12 @@ func (ct *cachedFeed) Next() (*Post, error) {
 func (ct *cachedFeed) Close() error {
 	return nil
 }
+
+type sortByFunc struct {
+	strings []string
+	lessFn  func(a, b string) bool
+}
+
+func (sbf sortByFunc) Len() int           { return len(sbf.strings) }
+func (sbf sortByFunc) Less(i, j int) bool { return sbf.lessFn(sbf.strings[i], sbf.strings[j]) }
+func (sbf sortByFunc) Swap(i, j int)      { sbf.strings[i], sbf.strings[j] = sbf.strings[j], sbf.strings[i] }
