@@ -15,6 +15,16 @@ import (
 	"golang.org/x/net/html"
 )
 
+func init() {
+	if http.DefaultClient.Jar == nil {
+		cookiesPerDomain := make(map[string][]*http.Cookie)
+		cookiesPerDomain["livejournal.com"] = []*http.Cookie{
+			&http.Cookie{Name: "adult_explicit", Value: "1"},
+		}
+		http.DefaultClient.Jar = domainCookieJar(cookiesPerDomain)
+	}
+}
+
 var RelAlternateMatcher = cascadia.MustCompile(`link[rel=alternate]`)
 
 func NewRSS(ctx context.Context, name string, _ Search) (Feed, error) {
@@ -180,5 +190,24 @@ func (rss *rss) Next() (*Post, error) {
 }
 
 func (rss *rss) Close() error {
+	return nil
+}
+
+type domainCookieJar map[string][]*http.Cookie
+
+func (dcj domainCookieJar) SetCookies(u *url.URL, cookies []*http.Cookie) {}
+
+func (dcj domainCookieJar) Cookies(u *url.URL) []*http.Cookie {
+	cookies, ok := dcj[u.Host]
+	if ok {
+		return cookies
+	}
+	domainParts := strings.SplitN(u.Host, ".", 2)
+	for i := range domainParts {
+		cookies, ok := dcj[strings.Join(domainParts[i:], ".")]
+		if ok {
+			return cookies
+		}
+	}
 	return nil
 }
