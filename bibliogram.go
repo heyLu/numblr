@@ -43,7 +43,8 @@ func NewBibliogram(ctx context.Context, name string, _ Search) (Feed, error) {
 
 	for attempts := 0; attempts < len(bibliogramInstances); attempts++ {
 		rssURL = bibliogramInstances[rand.Intn(len(bibliogramInstances))] + fmt.Sprintf("/u/%s/rss.xml", url.PathEscape(name[:nameIdx]))
-		req, err := http.NewRequestWithContext(ctx, "GET", rssURL, nil)
+		var req *http.Request
+		req, err = http.NewRequestWithContext(ctx, "GET", rssURL, nil)
 		if err != nil {
 			return nil, fmt.Errorf("new request: %w", err)
 		}
