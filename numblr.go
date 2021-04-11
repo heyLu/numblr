@@ -1374,8 +1374,13 @@ type tumblrMerger struct {
 
 func (tm *tumblrMerger) Name() string {
 	name := ""
+	first := true
 	for _, t := range tm.feeds {
-		name += " " + t.Name()
+		if !first {
+			name += " "
+		}
+		first = false
+		name += t.Name()
 	}
 	return name
 }
