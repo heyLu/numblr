@@ -35,6 +35,7 @@ func NewTumblrRSS(ctx context.Context, name string, _ Search) (Feed, error) {
 		return nil, fmt.Errorf("download: wrong response code: %d", resp.StatusCode)
 	}
 
+	// TODO: use regular feed reader instead (slowness may come from here?  should actually test this theory)
 	dec := xml.NewDecoder(resp.Body)
 	token, err := dec.Token()
 	for err == nil {
