@@ -375,20 +375,21 @@ func parseYoutubeTimeText(s string) (*time.Time, error) {
 	t := time.Now()
 	switch parts[1] {
 	case "minute", "minutes":
-		t = t.Add(-time.Duration(num) * time.Minute)
+		t = t.Add(-time.Duration(num) * time.Minute).Truncate(time.Second)
 	case "hour", "hours":
-		t = t.Add(-time.Duration(num) * time.Hour)
+		t = t.Add(-time.Duration(num) * time.Hour).Truncate(time.Minute)
 	case "day", "days":
-		t = t.AddDate(0, 0, -int(num))
+		t = t.AddDate(0, 0, -int(num)).Truncate(24*time.Hour)
 	case "week", "weeks":
-		t = t.AddDate(0, 0, -int(num)*7)
+		t = t.AddDate(0, 0, -int(num)*7).Truncate(24*time.Hour)
 	case "month", "months":
-		t = t.AddDate(0, -int(num), 0)
+		t = t.AddDate(0, -int(num), 0).Truncate(24*time.Hour)
 	case "year", "years":
-		t = t.AddDate(-int(num), 0, 0)
+		t = t.AddDate(-int(num), 0, 0).Truncate(24*time.Hour)
 	default:
 		return nil, fmt.Errorf("unexpected time format %q (can't parse %q)", s, parts[1])
 	}
 
+	t = t.UTC()
 	return &t, nil
 }
