@@ -17,6 +17,10 @@ import (
 const TumblrDate = "Mon, 2 Jan 2006 15:04:05 -0700"
 
 func NewTumblrRSS(ctx context.Context, name string, _ Search) (Feed, error) {
+	nameIdx := strings.Index(name, "@")
+	if nameIdx != -1 {
+		name = name[:nameIdx]
+	}
 	rssURL := fmt.Sprintf("https://%s.tumblr.com/rss", name)
 	req, err := http.NewRequestWithContext(ctx, "GET", rssURL, nil)
 	if err != nil {
