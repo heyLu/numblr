@@ -1473,9 +1473,9 @@ type CacheFn func(ctx context.Context, name string, uncachedFn FeedFn, search Se
 
 func NewCachedFeed(ctx context.Context, name string, cacheFn CacheFn, search Search) (Feed, error) {
 	switch {
-	case strings.HasSuffix(name, "@twitter"):
+	case strings.HasSuffix(name, "@twitter") || strings.HasSuffix(name, "@t"):
 		return cacheFn(ctx, name, NewNitter, search)
-	case strings.HasSuffix(name, "@instagram"):
+	case strings.HasSuffix(name, "@instagram") || strings.HasSuffix(name, "@ig"):
 		return cacheFn(ctx, name, NewBibliogram, search)
 	case strings.Contains(name, "archiveofourown.org"):
 		return cacheFn(ctx, name, NewAO3, search)
