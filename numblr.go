@@ -1506,6 +1506,8 @@ func NewCachedFeed(ctx context.Context, name string, cacheFn CacheFn, search Sea
 		return cacheFn(ctx, name, NewNitter, search)
 	case strings.HasSuffix(name, "@instagram") || strings.HasSuffix(name, "@ig"):
 		return cacheFn(ctx, name, NewBibliogram, search)
+	case strings.HasSuffix(name, "@youtube") || strings.HasSuffix(name, "@yt"):
+		return cacheFn(ctx, name, NewYoutube, search)
 	case strings.HasSuffix(name, "@tumblr"):
 		return cacheFn(ctx, name, NewTumblrRSS, search)
 	case strings.Contains(name, "archiveofourown.org"):

@@ -132,6 +132,7 @@ func NewRSS(ctx context.Context, name string, _ Search) (Feed, error) {
 type rss struct {
 	name string
 	feed *gofeed.Feed
+	item *gofeed.Item
 }
 
 func (rss *rss) Name() string {
@@ -148,6 +149,7 @@ func (rss *rss) Next() (*Post, error) {
 	}
 
 	item := rss.feed.Items[0]
+	rss.item = item
 	rss.feed.Items = rss.feed.Items[1:]
 
 	var avatarURL string
@@ -187,6 +189,10 @@ func (rss *rss) Next() (*Post, error) {
 		DateString:      dateString,
 		Date:            *date,
 	}, nil
+}
+
+func (rss *rss) FeedItem() *gofeed.Item {
+	return rss.item
 }
 
 func (rss *rss) Close() error {
