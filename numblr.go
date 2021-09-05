@@ -82,6 +82,12 @@ const TagsCollapseCount = 20
 //go:embed favicon.png
 var FaviconPNGBytes []byte
 
+//go:embed README.md
+var ReadmeBytes []byte
+
+//go:embed CHANGELOG.md
+var ChangelogBytes []byte
+
 var cacheFn CacheFn = NewCached
 
 var cache *lru.Cache
@@ -254,6 +260,14 @@ self.addEventListener('install', function(e) {
   });
 });
 `)
+	})
+
+	router.HandleFunc("/about", func(w http.ResponseWriter, req *http.Request) {
+		w.Write(ReadmeBytes)
+	})
+
+	router.HandleFunc("/changes", func(w http.ResponseWriter, req *http.Request) {
+		w.Write(ChangelogBytes)
 	})
 
 	// TODO: implement a follow button (first only for generic feed, either add to cookie or url, depending on context)
@@ -465,7 +479,8 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 	<meta name="color-scheme" content="dark light" />
 	<meta name="description" content="Mirror of %s feeds" />
 	<title>%s</title>
-	<style>.jumper { font-size: 2em; float: right; text-decoration: none; }.jump-to-top { position: sticky; bottom: 0.25em; }blockquote, figure { margin: 0; }blockquote:not(:last-child) { border-bottom: 1px solid #ddd; } blockquote.question{padding-left: 2em;}blockquote.question ::before, blockquote.question ::after { content: "“"; font-family: serif; font-size: x-large; }body { scroll-behavior: smooth; font-family: sans-serif; overflow-wrap: break-word; }article,details:not([open]){ border-bottom: 1px solid black; padding-bottom: 1em; margin-bottom: 1em; }article h1 a, article h4 a { text-decoration: none; border-bottom: 1px dotted black; }.tags { list-style: none; padding: 0; color: #666; }.tags li, .tags display, tags display[open] { display: inline }.tags a, .tags a:visited{color: #333; text-decoration: none;}img:not(.avatar), video, iframe { max-width: 100%%; height: auto; object-fit: contain }@media (min-width: 60em) { body { margin: 0 auto; max-width: 60em; } img:not(.avatar), video { max-height: 50vh; width: auto; object-fit: contain; } img:hover:not(.avatar)}.avatar{width: 1em;height: 1em;vertical-align: middle;display:inline-block;}a.author,a.author:visited,a.tumblr-link,a.tumblr-link:visited{color: #000; font-weight: bold;}a.tumblr-link{padding: 0.5em; text-decoration: none; font-size: larger; vertical-align: middle;}.next-page { display: flex; justify-content: center; padding: 1em; }.ao3 dl dt, .ao3 dl dd { display: inline; margin-left: 0}.ao3 blockquote { border: none; }textarea{ width: 100%%; }%s</style>
+	<style>body { margin: 0; } #menu { --blue: 0, 0, 255; background: linear-gradient(to right, rgba(var(--blue), 0.1), pink); } #menu ul { display: flex; list-style-type: none; padding-left: 0; padding: 0.2em; margin: 0 auto; max-width: 60em; } #menu ul li { padding-left: 0.5em; } #menu ul li:first-of-type { padding-left: 0; flex-grow: 4; }</style>
+	<style>.jumper { font-size: 2em; float: right; text-decoration: none; }.jump-to-top { position: sticky; bottom: 0.25em; }blockquote, figure { margin: 0; }blockquote:not(:last-child) { border-bottom: 1px solid #ddd; } blockquote.question{padding-left: 2em;}blockquote.question ::before, blockquote.question ::after { content: "“"; font-family: serif; font-size: x-large; }#content { scroll-behavior: smooth; font-family: sans-serif; overflow-wrap: break-word; margin: 8px; }article,details:not([open]){ border-bottom: 1px solid black; padding-bottom: 1em; margin-bottom: 1em; }article h1 a, article h4 a { text-decoration: none; border-bottom: 1px dotted black; }.tags { list-style: none; padding: 0; color: #666; }.tags li, .tags display, tags display[open] { display: inline }.tags a, .tags a:visited{color: #333; text-decoration: none;}img:not(.avatar), video, iframe { max-width: 100%%; height: auto; object-fit: contain }@media (min-width: 60em) { #content { margin: 0 auto; max-width: 60em; } img:not(.avatar), video { max-height: 50vh; width: auto; object-fit: contain; } img:hover:not(.avatar)}.avatar{width: 1em;height: 1em;vertical-align: middle;display:inline-block;}a.author,a.author:visited,a.tumblr-link,a.tumblr-link:visited{color: #000; font-weight: bold;}a.tumblr-link{padding: 0.5em; text-decoration: none; font-size: larger; vertical-align: middle;}.next-page { display: flex; justify-content: center; padding: 1em; }.ao3 dl dt, .ao3 dl dd { display: inline; margin-left: 0}.ao3 blockquote { border: none; }textarea{ width: 100%%; }%s</style>
 	<link rel="preconnect" href="https://64.media.tumblr.com/" />
 	<link rel="manifest" href="/manifest.webmanifest" />
 	<meta name="theme-color" content="#222222" />
@@ -473,6 +488,18 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 </head>
 
 <body>
+
+<nav id="menu">
+	<ul>
+		<li><a href="/" title="Alternative Tumblr (and Twitter, Instagram, AO3, RSS, ...) frontend."><img style="height: 1em; vertical-align: sub;" src="/favicon.png" /> numblr</a></li>
+
+		<li><a href="/about" title="wtf is this?!">/about</a></li>
+		<li><a href="/changes">/changes</a></li>
+		<li><a href="https://github.com/heyLu/numblr">/source-code</a></li>
+	</ul>
+</nav>
+
+<div id="content">
 
 <a class="jumper" href="#bottom">▾</a>
 
@@ -890,6 +917,8 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 		.catch((err) => console.log("numblr registration failed: ", err));
   }
 </script>`)
+
+	fmt.Fprintln(w, `</div>`)
 
 	fmt.Fprintln(w, `</body>
 </html>`)
