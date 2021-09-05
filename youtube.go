@@ -1,6 +1,8 @@
 package main
 
 import (
+	"strconv"
+	"time"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -86,20 +88,37 @@ func NewYoutube(ctx context.Context, name string, search Search) (Feed, error) {
 		avatarURL = baseURL.ResolveReference(thumbnailURL).String()
 	}
 
-	// TODO: parse community posts (?)
+	req, err = http.NewRequestWithContext(ctx, "GET", "https://youtube.com/channel/" + url.QueryEscape(channelID) + "/community", nil)
+	if err != nil {
+		return nil, fmt.Errorf("new request: %w", err)
+	}
+	req.Header.Set("Accept-Language", "en-UK")
+
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("fetching community posts: %w", err)
+	}
+	defer resp.Body.Close()
+
+	communityPosts, err := parseCommunityPosts(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("parsing community posts: %w", err)
+	}
 
 	feed, err := NewRSS(ctx, "https://www.youtube.com/feeds/videos.xml?channel_id="+url.QueryEscape(channelID), search)
 	if err != nil {
 		return nil, err
 	}
 
-	return &youtubeRSS{name: name, url: channelURL.String(), avatarURL: avatarURL, rss: feed.(*rss)}, nil
+	return &youtubeRSS{name: name, url: channelURL.String(), avatarURL: avatarURL, communityPosts: communityPosts, rss: feed.(*rss)}, nil
 }
 
 type youtubeRSS struct {
 	name      string
 	url       string
 	avatarURL string
+
+	communityPosts []*Post
 
 	*rss
 }
@@ -114,6 +133,19 @@ func (yt *youtubeRSS) URL() string {
 }
 
 func (yt *youtubeRSS) Next() (*Post, error) {
+	// TODO: sort community posts correctly (simply merge feeds?)
+	if len(yt.communityPosts) > 0 {
+		post := yt.communityPosts[0]
+		yt.communityPosts = yt.communityPosts[1:]
+
+		post.Source = "youtube"
+		post.Author = yt.name
+
+		post.AvatarURL = yt.avatarURL
+
+		return post, nil
+	}
+
 	post, err := yt.rss.Next()
 	if err != nil {
 		return nil, err
@@ -198,4 +230,165 @@ type youtubeChannel struct {
 			}
 		} `json:"descriptionSnippet"`
 	} `json:"channelRenderer"`
+}
+
+func parseCommunityPosts(r io.Reader) ([]*Post, error) {
+	buf := new(bytes.Buffer)
+	_, err := io.Copy(buf, &io.LimitedReader{R: r, N: maxResultSize})
+	if err != nil {
+		return nil, fmt.Errorf("reading search results: %w", err)
+	}
+
+	content := buf.Bytes()
+	communityPostsIdx := bytes.Index(content, youtubeCommunityPostsStart)
+	if communityPostsIdx == -1 {
+		return nil, fmt.Errorf("invalid search results: %q not found", youtubeCommunityPostsStart)
+	}
+
+	buf.Reset()
+	_, err = buf.Write(content[communityPostsIdx+len(youtubeCommunityPostsStart):])
+	if err != nil {
+		return nil, fmt.Errorf("truncating search results: %w", err)
+	}
+
+	var results []youtubeCommunityPost
+	dec := json.NewDecoder(buf)
+	err = dec.Decode(&results)
+	if err != nil {
+		return nil, fmt.Errorf("parsing search results: %w", err)
+	}
+
+	posts := make([]*Post, 0, len(results))
+	for _, result := range results {
+		data := result.BackstagePostThreadRenderer.Post.BackstagePostRenderer
+		if data.PostID == "" {
+			continue // non backstagePostRenderer
+		}
+
+		date, err := parseYoutubeTimeText(data.PublishedTimeText.Runs[0].Text)
+		if err != nil {
+			return nil, fmt.Errorf("invalid timestamp: %w", err)
+		}
+
+		description := ""
+		for _, run := range data.ContentText.Runs {
+			description += run.Text
+		}
+
+		post := &Post{
+			ID: data.PostID,
+			DescriptionHTML: description,
+			URL: "https://youtube.com/post/" + url.QueryEscape(data.PostID),
+			Date: *date,
+			DateString: data.PublishedTimeText.Runs[0].Text,
+		}
+
+		posts = append(posts, post)
+	}
+
+	return posts, nil
+}
+
+var youtubeCommunityPostsStart = []byte(`{"itemSectionRenderer":{"contents":`)
+
+// youtubeCommunityPost is the internal JSON format that YouTube uses to
+// render community posts on their website.
+//
+// "itemSectionRenderer": {
+//   "contents": [
+//     {
+//       "backstagePostThreadRenderer": {
+//         "post": {
+//           "backstagePostRenderer": {
+//             "postId": "UgwvfmsbaKk_pYImxll4AaABCQ",
+//             "contentText": {
+//               "runs": [ { "text": "I had the immense pleasure of filming with " },
+//                 ...
+//               ]
+//             },
+//             "backstageAttachment": {
+//               "videoRenderer": {
+//                 "videoId": "d9zHO6Lh2zY",
+//                 "thumbnail": {
+//                   "thumbnails": [ { "url": "https://i.ytimg.com/vi/d9zHO6Lh2zY/hq720.jpg?sqp=-oaymwEjCOgCEMoBSFryq4qpAxUIARUAAAAAGAElAADIQj0AgKJDeAE=&rs=AOn4CLBfEhxren7vOP7R9ATaCilq0dE1Pg", "width": 360, "height": 202 },
+//                     ...
+//                   ]
+//                 },
+//                 "title": {
+//                   "runs": [ { "text": "Tom Scott plus: the new second channel" }
+//                   ],
+//                 },
+//                 "descriptionSnippet": {
+//                   "runs": [ { "text": "I don't get to work with my friends all that much. It's time to change that. New videos every other Saturday, starting 4th September. Unscripted, unrehearsed, and out of my comfort zone: this..." } ]
+//                 },
+//                 "longBylineText": {},
+//                 "publishedTimeText": {
+//                   "simpleText": "vor 4 Tagen"
+//                 },
+//                 "viewCountText": {
+//                   "simpleText": "228.799 Aufrufe"
+//                 }
+//               }
+//             },
+//             "publishedTimeText": {
+//               "runs": [ { "text": "vor 3 Tagen", "navigationEndpoint": }
+//               ]
+//             },
+//             "voteCount": {
+//               "simpleText": "473"
+//             },
+type youtubeCommunityPost struct {
+	BackstagePostThreadRenderer struct {
+		Post struct {
+			BackstagePostRenderer struct {
+				PostID string `json:"postId"`
+				ContentText struct {
+					Runs []struct {
+						Text string `json:"text"`
+					} `json:"runs"`
+				} `json:"contentText"`
+				PublishedTimeText struct {
+					Runs []struct{
+						Text string `json:"text"`
+					} `json:"runs"`
+				} `json:"publishedTimeText"`
+			} `json:"backstagePostRenderer"`
+		} `json:"post"`
+	} `json:"backstagePostThreadRenderer"`
+}
+
+func parseYoutubeTimeText(s string) (*time.Time, error) {
+	parts := strings.SplitN(s, " ", 4)
+	if len(parts) < 3 {
+		return nil, fmt.Errorf("unexpected time format %q (%d parts)", s, len(parts))
+	}
+
+	num, err := strconv.ParseUint(parts[0], 10, 0)
+	if err != nil {
+		return nil, fmt.Errorf("unexpected time format %q (invalid number): %w", s, err)
+	}
+
+	if parts[2] != "ago" {
+		return nil, fmt.Errorf("unexpected time format %q (\"ago\" not found)", s)
+	}
+
+	t := time.Now()
+	switch parts[1] {
+	case "minute", "minutes":
+		t = t.Add(-time.Duration(num) * time.Minute)
+	case "hour", "hours":
+		t = t.Add(-time.Duration(num) * time.Hour)
+	case "day", "days":
+		t = t.AddDate(0, 0, -int(num))
+	case "week", "weeks":
+		t = t.AddDate(0, 0, -int(num)*7)
+	case "month", "months":
+		t = t.AddDate(0, -int(num), 0)
+	case "year", "years":
+		t = t.AddDate(-int(num), 0, 0)
+	default:
+		return nil, fmt.Errorf("unexpected time format %q (can't parse %q)", s, parts[1])
+	}
+
+	return &t, nil
 }
