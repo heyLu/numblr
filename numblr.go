@@ -909,6 +909,13 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
     lastTouch = ev.timeStamp;
   });
 
+  window.addEventListener('click', (ev) => {
+    if (ev.ctrlKey) {
+      let postLink = ev.target.closest('article').querySelector('a[title="link to just this post"]').href;
+      window.location = postLink;
+    }
+  });
+
   // service worker to be detected as a progressive web app in webkit-based browsers
 
   if ('serviceWorker' in navigator) {
