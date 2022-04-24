@@ -107,7 +107,7 @@ func NewDatabaseCached(ctx context.Context, db *sql.DB, name string, uncachedFn 
 	timedCtx := ctx
 	if !hasTimeout && isCached {
 		// if we have the feed cached and the uncached one took too long, return the cached one
-		timedCtx, cancel = context.WithTimeout(ctx, 100*time.Millisecond)
+		timedCtx, cancel = context.WithTimeout(ctx, 150*time.Millisecond)
 		defer cancel()
 	}
 
