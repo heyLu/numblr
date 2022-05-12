@@ -87,6 +87,9 @@ func NewDatabaseCached(ctx context.Context, db *sql.DB, name string, uncachedFn 
 		var rows *sql.Rows
 		if search.BeforeID != "" {
 			rows, err = tx.QueryContext(ctx, "SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? AND id < ? ORDER BY date DESC LIMIT 20", name, search.BeforeID)
+		} else if len(search.Terms) > 0 {
+			match := "%" + search.Terms[0] + "%"
+			rows, err = tx.QueryContext(ctx, "SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? AND (title LIKE ? OR description_html LIKE ? OR tags LIKE ?) ORDER BY date DESC LIMIT 20", name, match, match, match)
 		} else {
 			rows, err = tx.QueryContext(ctx, "SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? ORDER BY date DESC LIMIT 20", name)
 		}
