@@ -258,9 +258,13 @@ type databaseCached struct {
 	url       string
 	outOfDate bool
 	rows      *sql.Rows
+	lastPost  *Post
 }
 
 func (dc *databaseCached) Name() string {
+	if dc.lastPost != nil && dc.lastPost.Author != "" {
+		return dc.lastPost.Author
+	}
 	return dc.name
 }
 
@@ -293,6 +297,7 @@ func (dc *databaseCached) Next() (*Post, error) {
 		post.Tags = append(post.Tags, "numblr:out-of-date")
 	}
 
+	dc.lastPost = &post
 	return &post, nil
 }
 
