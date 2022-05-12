@@ -327,6 +327,7 @@ self.addEventListener('install', function(e) {
 
 	router.HandleFunc("/", HandleTumblr)
 	router.HandleFunc("/{feeds}", HandleTumblr)
+	router.HandleFunc("/{feeds}/", HandleTumblr)
 
 	router.HandleFunc("/list/{list}", HandleTumblr)
 
@@ -413,6 +414,11 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 			feed = url.PathEscape(feed)
 		}
 		http.Redirect(w, req, "/"+feed, http.StatusFound)
+		return
+	}
+
+	if len(req.URL.Path) > 1 && strings.HasSuffix(req.URL.Path, "/") {
+		http.Redirect(w, req, req.URL.Path[:len(req.URL.Path)-1], http.StatusFound)
 		return
 	}
 
