@@ -98,6 +98,17 @@ func NewDatabaseCached(ctx context.Context, db *sql.DB, name string, uncachedFn 
 		return &databaseCached{name: name, url: url, rows: rows}, nil
 	}
 
+	if name == "random" {
+		rows, err := tx.QueryContext(ctx, "SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author IN (SELECT name FROM feed_infos ORDER BY RANDOM() LIMIT 20) GROUP BY author ORDER BY RANDOM() LIMIT 20", name)
+		if err != nil {
+			tx.Rollback()
+			return nil, fmt.Errorf("querying posts: %w", err)
+		}
+
+		return &databaseCached{name: name, url: url, rows: rows}, nil
+
+	}
+
 	// close readonly tx, open new one later when saving
 	tx.Rollback()
 
