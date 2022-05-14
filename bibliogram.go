@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-var BibliogramInstancesURL = "https://bibliogram.snopyta.org/api/instances"
+var BibliogramInstancesURL = "https://bibliogram.art/api/instances"
 
 var bibliogramInstances []string
 var bibliogramInitialized bool
