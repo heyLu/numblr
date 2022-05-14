@@ -740,6 +740,10 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 				return ``
 			})
 
+			for _, term := range search.Terms {
+				postHTML = strings.Replace(postHTML, term, "<mark>"+term+"</mark>", -1)
+			}
+
 			fmt.Fprint(w, postHTML)
 
 			fmt.Fprintln(w, `</section>`)
@@ -752,10 +756,20 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 						fmt.Fprintf(w, `<details><summary>...</summary> `)
 					}
 
+					tagFound := false
+					for _, searchTag := range search.Tags {
+						if tag == searchTag {
+							tagFound = true
+						}
+					}
+
 					tagLink := *req.URL
 					tagParams := tagLink.Query()
 					tagParams.Set("search", "#"+tag)
 					tagLink.RawQuery = tagParams.Encode()
+					if tagFound {
+						tag = "<mark>" + tag + "</mark>"
+					}
 					fmt.Fprintf(w, `<li><a href=%q>#%s</a></li> `, &tagLink, tag)
 				}
 				if len(post.Tags) >= TagsCollapseCount {
