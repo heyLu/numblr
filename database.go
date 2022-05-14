@@ -127,7 +127,7 @@ func NewDatabaseCached(ctx context.Context, db *sql.DB, name string, uncachedFn 
 
 	feed, err := uncachedFn(timedCtx, name, search)
 	if err != nil {
-		if isCached && timedCtx.Err() != nil && (errors.Is(timedCtx.Err(), context.DeadlineExceeded) || isTimeoutError(err)) {
+		if isCached && (errors.Is(timedCtx.Err(), context.DeadlineExceeded) || isTimeoutError(err)) {
 			var rows *sql.Rows
 			var err error
 			if search.BeforeID != "" {
