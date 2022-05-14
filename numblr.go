@@ -741,7 +741,14 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 			})
 
 			for _, term := range search.Terms {
-				postHTML = strings.Replace(postHTML, term, "<mark>"+term+"</mark>", -1)
+				termRE, err := regexp.Compile("(?i)(" + regexp.QuoteMeta(term) + ")")
+				if err != nil {
+					postHTML = strings.Replace(postHTML, term, "<mark>"+term+"</mark>", -1)
+					continue
+				}
+				postHTML = termRE.ReplaceAllStringFunc(postHTML, func(repl string) string {
+					return "<mark>" + repl + "</mark>"
+				})
 			}
 
 			fmt.Fprint(w, postHTML)
@@ -758,7 +765,7 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 
 					tagFound := false
 					for _, searchTag := range search.Tags {
-						if tag == searchTag {
+						if strings.ToLower(tag) == strings.ToLower(searchTag) {
 							tagFound = true
 						}
 					}
