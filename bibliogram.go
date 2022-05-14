@@ -55,6 +55,9 @@ func NewBibliogram(ctx context.Context, name string, _ Search) (Feed, error) {
 		}
 		if resp.StatusCode != 200 {
 			err = fmt.Errorf("download %q: wrong response code: %d", rssURL, resp.StatusCode)
+			if resp.StatusCode == 403 { // instance likely blocked at the moment
+				continue
+			}
 			if resp.StatusCode < 500 {
 				break
 			}
