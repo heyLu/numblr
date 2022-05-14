@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 )
@@ -27,16 +28,22 @@ type Stats struct {
 	RecentUsers []string
 	lastUser    int
 	seenUser    map[string]int
+
+	RecentLogs []string
+	lastLog    int
+	seenLog    map[string]int
 }
 
 var globalStats *Stats = nil
 
-func EnableStats(numErrors int, numUsers int) {
+func EnableStats(numErrors int, numUsers int, numLogs int) {
 	globalStats = &Stats{}
 	globalStats.RecentErrors = make([]string, numErrors)
 	globalStats.seenError = make(map[string]int, numUsers)
 	globalStats.RecentUsers = make([]string, numUsers)
 	globalStats.seenUser = make(map[string]int, numUsers)
+	globalStats.RecentLogs = make([]string, numLogs)
+	globalStats.seenLog = make(map[string]int, numLogs)
 }
 
 func EnableDatabaseStats(db *sql.DB, path string) {
@@ -85,6 +92,41 @@ func CountView() {
 	globalStats.mu.Lock()
 	globalStats.NumViews++
 	globalStats.mu.Unlock()
+}
+
+type CollectLogsWriter struct{}
+
+func (clw *CollectLogsWriter) Write(p []byte) (n int, err error) {
+	n = len(p)
+	err = nil
+
+	if globalStats == nil {
+		return
+	}
+
+	s := string(p[:len(p)-1])
+
+	globalStats.mu.Lock()
+	defer globalStats.mu.Unlock()
+
+	// skip logs that have been logged as errors before
+	for seenErr := range globalStats.seenError {
+		if strings.HasSuffix(s, seenErr) {
+			return
+		}
+	}
+
+	if globalStats.seenLog[s] > 0 {
+		globalStats.seenLog[s]++
+		return
+	}
+	globalStats.seenLog[s]++
+	oldestLog := (globalStats.lastLog + 1) % len(globalStats.RecentLogs)
+	delete(globalStats.seenLog, globalStats.RecentLogs[oldestLog])
+	globalStats.RecentLogs[globalStats.lastLog%len(globalStats.RecentLogs)] = s
+	globalStats.lastLog = oldestLog
+
+	return
 }
 
 func CollectError(err error) {
@@ -151,6 +193,13 @@ func StatsHandler(w http.ResponseWriter, req *http.Request) {
 	for _, user := range globalStats.RecentUsers {
 		if user != "" {
 			fmt.Fprintf(w, "  %s (%d)\n", user, globalStats.seenUser[user])
+		}
+	}
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "recent logs:")
+	for _, log := range globalStats.RecentLogs {
+		if log != "" {
+			fmt.Fprintf(w, "  %s (%d)\n", log, globalStats.seenLog[log])
 		}
 	}
 }

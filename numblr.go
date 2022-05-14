@@ -11,6 +11,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"os"
 	"path"
 	"regexp"
 	"sort"
@@ -218,7 +219,10 @@ func main() {
 
 	router.Handle("/stats", http.HandlerFunc(StatsHandler))
 	if config.CollectStats {
-		EnableStats(20, 20)
+		EnableStats(20, 20, 20)
+
+		log.SetOutput(io.MultiWriter(os.Stdout, &CollectLogsWriter{}))
+
 	}
 
 	router.HandleFunc("/favicon.ico", func(w http.ResponseWriter, req *http.Request) {
