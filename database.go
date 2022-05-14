@@ -83,7 +83,7 @@ func NewDatabaseCached(ctx context.Context, db *sql.DB, name string, uncachedFn 
 	}
 
 	isCached := err != sql.ErrNoRows
-	if isCached && time.Since(cachedAt) < CacheTime {
+	if !search.ForceFresh && isCached && time.Since(cachedAt) < CacheTime {
 		var rows *sql.Rows
 		if search.BeforeID != "" {
 			rows, err = tx.QueryContext(ctx, "SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? AND id < ? ORDER BY date DESC LIMIT 20", name, search.BeforeID)
@@ -127,7 +127,7 @@ func NewDatabaseCached(ctx context.Context, db *sql.DB, name string, uncachedFn 
 
 	feed, err := uncachedFn(timedCtx, name, search)
 	if err != nil {
-		if isCached && (errors.Is(timedCtx.Err(), context.DeadlineExceeded) || isTimeoutError(err)) {
+		if !search.ForceFresh && isCached && (errors.Is(timedCtx.Err(), context.DeadlineExceeded) || isTimeoutError(err)) {
 			var rows *sql.Rows
 			var err error
 			if search.BeforeID != "" {

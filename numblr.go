@@ -155,7 +155,7 @@ func main() {
 						ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 						defer cancel()
 
-						feed, err := NewCachedFeed(ctx, feedName, cacheFn, Search{})
+						feed, err := NewCachedFeed(ctx, feedName, cacheFn, Search{ForceFresh: true})
 						if err != nil {
 							log.Printf("Error: background refresh: opening %s: %s", feedName, err)
 							return
@@ -990,6 +990,8 @@ type Search struct {
 	Tags         []string
 	ExcludeTerms []string
 	ExcludeTags  []string
+
+	ForceFresh bool
 }
 
 func (s *Search) Matches(p *Post) bool {
