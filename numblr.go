@@ -42,7 +42,7 @@ type Post struct {
 var isReblogRE = regexp.MustCompile(`^\s*[-\w]+:`)
 
 func (p Post) IsReblog() bool {
-	return isReblogRE.MatchString(p.Title)
+	return isReblogRE.MatchString(p.Title) || strings.Contains(p.DescriptionHTML, `class="tumblr_blog"`)
 }
 
 var contentNoteRE = regexp.MustCompile(`\b(tw|trigger warning|cn|content note|cw|content warning)\b`)
