@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"strings"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -156,6 +157,9 @@ func NewDatabaseCached(ctx context.Context, db *sql.DB, name string, uncachedFn 
 }
 
 func isTimeoutError(err error) bool {
+	if strings.Contains(err.Error(), "Temporary failure in name resolution") {
+		return true
+	}
 	te, hasTimeout := err.(timeoutError)
 	if !hasTimeout {
 		return false
