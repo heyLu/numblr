@@ -776,7 +776,7 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 	fmt.Fprintln(w, `<span id="bottom"></span>
 <a id="link-top" class="jumper" href="#">▴</a>`)
 
-	if err == nil && lastPost != nil {
+	if lastPost != nil {
 		nextPage := req.URL
 		query := url.Values{}
 		query.Set("before", lastPost.ID)
