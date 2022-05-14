@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -128,6 +129,7 @@ func NewDatabaseCached(ctx context.Context, db *sql.DB, name string, uncachedFn 
 	feed, err := uncachedFn(timedCtx, name, search)
 	if err != nil {
 		if !search.ForceFresh && isCached && (errors.Is(timedCtx.Err(), context.DeadlineExceeded) || isTimeoutError(err)) {
+			log.Printf("returning out-of-date feed %q, caused by %v / %v", name, timedCtx.Err(), err)
 			var rows *sql.Rows
 			var err error
 			if search.BeforeID != "" {
