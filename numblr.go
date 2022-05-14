@@ -152,20 +152,21 @@ func main() {
 
 				successfulFeeds := 0
 				for _, feedName := range feeds {
-					func(feedName string) {
+					err := func(feedName string) error {
 						ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 						defer cancel()
 
 						feed, err := NewCachedFeed(ctx, feedName, cacheFn, Search{ForceFresh: true})
 						if err != nil {
-							log.Printf("Error: background refresh: opening %s: %s", feedName, err)
-							return
+							return fmt.Errorf("background refresh: opening %s: %s", feedName, err)
 						}
 						maxConcurrentFeeds <- true
 						defer func() {
 							err := feed.Close()
 							if err != nil {
-								log.Printf("Error: background refresh: closing %s: %s", feedName, err)
+								err = fmt.Errorf("background refresh: closing %s: %s", feedName, err)
+								CollectError(err)
+								log.Printf("Error: %s", err)
 							}
 							<-maxConcurrentFeeds
 						}()
@@ -176,12 +177,16 @@ func main() {
 						}
 
 						if err != nil && !errors.Is(err, io.EOF) {
-							log.Printf("Error: background refresh: iterating %s: %s", feedName, err)
-							return
+							return fmt.Errorf("background refresh: iterating %s: %s", feedName, err)
 						}
 
 						successfulFeeds++
+						return nil
 					}(feedName)
+					if err != nil {
+						CollectError(err)
+						log.Printf("Error: %s", err)
+					}
 				}
 
 				if len(feeds) > 0 {
