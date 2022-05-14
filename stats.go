@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
@@ -202,6 +203,15 @@ func StatsHandler(w http.ResponseWriter, req *http.Request) {
 			fmt.Fprintf(w, "  %s (%d)\n", log, globalStats.seenLog[log])
 		}
 	}
+	fmt.Fprintln(w)
+	version := "unknown (missing build info)"
+	buildInfo, ok := debug.ReadBuildInfo()
+	if ok {
+		version = buildInfo.String()
+	}
+	fmt.Fprintln(w, "build info:")
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, version)
 }
 
 type Bytes int64
