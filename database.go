@@ -19,7 +19,7 @@ func InitDatabase(dbPath string) (*sql.DB, error) {
 		return nil, fmt.Errorf("open: %w", err)
 	}
 
-	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS feed_infos ( name TEXT PRIMARY KEY, url TEXT, cached_at DATE )`)
+	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS feed_infos ( name TEXT PRIMARY KEY, url TEXT, cached_at DATE, description TEXT )`)
 	if err != nil {
 		return nil, fmt.Errorf("setup feed_infos table: %w", err)
 	}
@@ -245,7 +245,7 @@ func (ct *databaseCaching) Save() error {
 		return fmt.Errorf("update posts: %w", err)
 	}
 
-	res, err = tx.Exec(`INSERT OR REPLACE INTO feed_infos VALUES (?, ?, ?)`, ct.uncached.Name(), ct.uncached.URL(), ct.cachedAt)
+	res, err = tx.Exec(`INSERT OR REPLACE INTO feed_infos VALUES (?, ?, ?, ?)`, ct.uncached.Name(), ct.uncached.URL(), ct.cachedAt, "")
 	if err != nil {
 		tx.Rollback()
 		return fmt.Errorf("update feed_infos: %w", err)
