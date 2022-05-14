@@ -9,10 +9,10 @@ import (
 )
 
 func TestAO3AuthorFandomFeed(t *testing.T) {
-	feed, err := NewAO3(context.Background(), "https://archiveofourown.org/users/astolat/works?fandom_id=136512", Search{})
+	feed, err := NewAO3(context.Background(), "https://archiveofourown.org/users/astolat/works?fandom_id=136512&work_search[query]=vid", Search{})
 	assert.NoError(t, err, "new")
 
-	assert.Len(t, feed.(*ao3).works, 20)
+	assert.Len(t, feed.(*ao3).works, 1)
 
 	post, err := feed.Next()
 	assert.NoError(t, err, "next")
