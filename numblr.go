@@ -752,11 +752,11 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 						fmt.Fprintf(w, `<details><summary>...</summary> `)
 					}
 
-					tagLink := req.URL
+					tagLink := *req.URL
 					tagParams := tagLink.Query()
 					tagParams.Set("search", "#"+tag)
 					tagLink.RawQuery = tagParams.Encode()
-					fmt.Fprintf(w, `<li><a href=%q>#%s</a></li> `, tagLink, tag)
+					fmt.Fprintf(w, `<li><a href=%q>#%s</a></li> `, &tagLink, tag)
 				}
 				if len(post.Tags) >= TagsCollapseCount {
 					fmt.Fprintf(w, `</details>`)
@@ -789,6 +789,9 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 		nextPage := req.URL
 		query := url.Values{}
 		query.Set("before", lastPost.ID)
+		if req.URL.Query().Get("search") != "" {
+			query.Set("search", req.URL.Query().Get("search"))
+		}
 		nextPage.RawQuery = query.Encode()
 		fmt.Fprintf(w, `<div class="next-page"><a href="%s">next page</a></div>`, nextPage)
 	}
