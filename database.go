@@ -13,7 +13,7 @@ import (
 )
 
 func InitDatabase(dbPath string) (*sql.DB, error) {
-	db, err := sql.Open("sqlite3", "file:"+dbPath+"?_journal_mode=WAL&cache=shared&_busy_timeout=50")
+	db, err := sql.Open("sqlite3", "file:"+dbPath+"?_journal_mode=WAL&_busy_timeout=50")
 	if err != nil {
 		return nil, fmt.Errorf("open: %w", err)
 	}
