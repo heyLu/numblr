@@ -150,6 +150,7 @@ func main() {
 					return
 				}
 
+				successfulFeeds := 0
 				for _, feedName := range feeds {
 					func(feedName string) {
 						ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -178,11 +179,13 @@ func main() {
 							log.Printf("Error: background refresh: iterating %s: %s", feedName, err)
 							return
 						}
+
+						successfulFeeds++
 					}(feedName)
 				}
 
 				if len(feeds) > 0 {
-					log.Printf("Refreshed %d feeds", len(feeds))
+					log.Printf("Refreshed %d/%d feeds", successfulFeeds, len(feeds))
 				}
 			}
 
