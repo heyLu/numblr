@@ -30,8 +30,11 @@ type ao3 struct {
 }
 
 func NewAO3(ctx context.Context, name string, _ Search) (Feed, error) {
-	// TODO: implement author@ao3
 	// TODO: implement ao3 search
+	nameIdx := strings.Index(name, "@")
+	if nameIdx != -1 {
+		name = "https://archiveofourown.org/users/" + name[:nameIdx] + "/works"
+	}
 
 	u, err := url.Parse(name)
 	if err != nil {
