@@ -154,6 +154,23 @@ func NewDatabaseCached(ctx context.Context, db *sql.DB, name string, uncachedFn 
 			return &databaseCached{name: name, url: url, outOfDate: true, rows: rows}, nil
 		}
 
+		if strings.HasSuffix(err.Error(), "wrong response code: 404") {
+			// TODO: indicate to user that this was a 404
+			var rows *sql.Rows
+			var err error
+			if search.BeforeID != "" {
+				rows, err = db.QueryContext(ctx, "SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? AND id < ? ORDER BY date DESC LIMIT 20", name, search.BeforeID)
+			} else {
+				rows, err = db.QueryContext(ctx, "SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? ORDER BY date DESC LIMIT 20", name)
+			}
+			if err != nil {
+				tx.Rollback()
+				return nil, fmt.Errorf("querying posts: %w", err)
+			}
+
+			return &databaseCached{name: name, url: url, outOfDate: true, rows: rows}, nil
+		}
+
 		return nil, fmt.Errorf("open uncached: %w", err)
 	}
 	return &databaseCaching{
