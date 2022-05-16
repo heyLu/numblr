@@ -23,6 +23,7 @@ import (
 	"github.com/NYTimes/gziphandler"
 	"github.com/gorilla/mux"
 	lru "github.com/hashicorp/golang-lru"
+	"github.com/yuin/goldmark"
 	"golang.org/x/net/html"
 )
 
@@ -260,6 +261,7 @@ Disallow: /`)
   "theme_color": "#222222"
 }`, config.AppDisplayMode)
 	})
+
 	// required to be registered as a progressive web app (?)
 	router.HandleFunc("/service-worker.js", func(w http.ResponseWriter, req *http.Request) {
 		w.Header().Set("Content-Type", "text/javascript")
@@ -275,11 +277,23 @@ self.addEventListener('install', function(e) {
 	})
 
 	router.HandleFunc("/about", func(w http.ResponseWriter, req *http.Request) {
-		w.Write(ReadmeBytes)
+		htmlPrelude(w, req, "about:numblr", "about:numblr")
+
+		err := goldmark.Convert(ReadmeBytes, w)
+		if err != nil {
+			log.Printf("Could not render about page: %s", err)
+
+		}
 	})
 
 	router.HandleFunc("/changes", func(w http.ResponseWriter, req *http.Request) {
-		w.Write(ChangelogBytes)
+		htmlPrelude(w, req, "changes", "changes")
+
+		err := goldmark.Convert(ChangelogBytes, w)
+		if err != nil {
+			log.Printf("Could not render about page: %s", err)
+
+		}
 	})
 
 	// TODO: implement a follow button (first only for generic feed, either add to cookie or url, depending on context)
