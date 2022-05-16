@@ -354,6 +354,47 @@ self.addEventListener('install', function(e) {
 	log.Fatal(http.ListenAndServe(config.Addr, nil))
 }
 
+func htmlPrelude(w http.ResponseWriter, req *http.Request, title, description string) {
+	w.Header().Set("Content-Type", `text/html; charset="utf-8"`)
+
+	nightModeCSS := `body { color: #fff; background-color: #222; }.tags a,.tags a:visited{ color: #b7b7b7; text-decoration: none;}a { color: pink; }a:visited { color: #a67070; }article,details:not([open]){ border-bottom: 1px solid #666; }blockquote:not(:last-child) { border-bottom: 1px solid #333; }a.author,a.author:visited,a.tumblr-link,a.tumblr-link:visited{color: #fff;}img{filter: brightness(.8) contrast(1.2);} #menu a { color: #fff; }`
+	modeCSS := `@media (prefers-color-scheme: dark) {` + nightModeCSS + `}`
+	if _, ok := req.URL.Query()["night-mode"]; ok {
+		modeCSS = nightModeCSS
+	}
+
+	fmt.Fprintf(w, `<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width,minimum-scale=1,initial-scale=1" />
+	<meta name="color-scheme" content="dark light" />
+	<meta name="description" content="%s" />
+	<title>%s</title>
+	<style>body { margin: 0; } #menu { --blue: 0, 0, 255; background: linear-gradient(to right, rgba(var(--blue), 0.1), pink); font-family: monospace; font-size: large; font-weight: bold; } #menu ul { display: flex; list-style-type: none; padding-left: 0; padding: 0.3em; margin: 0 auto; max-width: 69em; } #menu ul li { padding-left: 0.75em; } #menu ul li:first-of-type { padding-left: 0; flex-grow: 4; }</style>
+	<style>.jumper { font-size: 2em; float: right; text-decoration: none; }.jump-to-top { position: sticky; bottom: 0.25em; }blockquote, figure { margin: 0; }blockquote:not(:last-child) { border-bottom: 1px solid #ddd; } blockquote.question{padding-left: 2em;}blockquote.question ::before, blockquote.question ::after { content: "“"; font-family: serif; font-size: x-large; }#content { scroll-behavior: smooth; font-family: sans-serif; overflow-wrap: break-word; margin: 8px; }article,details:not([open]){ border-bottom: 1px solid black; padding-bottom: 1em; margin-bottom: 1em; }article h1 a, article h4 a { text-decoration: none; border-bottom: 1px dotted black; }.tags { list-style: none; padding: 0; color: #666; }.tags li, .tags display, tags display[open] { display: inline }.tags a, .tags a:visited{color: #333; text-decoration: none;}img:not(.avatar), video, iframe { max-width: 100%%; height: auto; object-fit: contain }@media (min-width: 60em) { #content { margin: 0 auto; max-width: 60em; } img:not(.avatar), video { max-height: 50vh; width: auto; object-fit: contain; } img:hover:not(.avatar)}.avatar{width: 1em;height: 1em;vertical-align: middle;display:inline-block;}a.author,a.author:visited,a.tumblr-link,a.tumblr-link:visited{color: #000; font-weight: bold;}a.tumblr-link{padding: 0.5em; text-decoration: none; font-size: larger; vertical-align: middle;}.next-page { display: flex; justify-content: center; padding: 1em; }.ao3 dl dt, .ao3 dl dd { display: inline; margin-left: 0}.ao3 blockquote { border: none; }textarea{ width: 100%%; }%s</style>
+	<link rel="preconnect" href="https://64.media.tumblr.com/" />
+	<link rel="manifest" href="/manifest.webmanifest" />
+	<meta name="theme-color" content="#222222" />
+	<link rel="icon" href="/favicon.png" />
+</head>
+
+<body>
+
+<nav id="menu">
+	<ul>
+		<li><a href="/" title="Alternative Tumblr (and Twitter, Instagram, AO3, RSS, ...) frontend."><img style="height: 1em; vertical-align: sub;" src="/favicon.png" /> numblr</a></li>
+
+		<li><a href="/about" title="wtf is this?!">/about</a></li>
+		<li><a href="/changes">/changes</a></li>
+		<li><a href="https://github.com/heyLu/numblr">/source</a></li>
+	</ul>
+</nav>
+
+<div id="content">
+`, description, title, modeCSS)
+}
+
 func HandleAvatar(w http.ResponseWriter, req *http.Request) {
 	tumblr := mux.Vars(req)["tumblr"]
 
@@ -478,52 +519,20 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 
 	w.Header().Set("Content-Type", `text/html; charset="utf-8"`)
 
-	nightModeCSS := `body { color: #fff; background-color: #222; }.tags a,.tags a:visited{ color: #b7b7b7; text-decoration: none;}a { color: pink; }a:visited { color: #a67070; }article,details:not([open]){ border-bottom: 1px solid #666; }blockquote:not(:last-child) { border-bottom: 1px solid #333; }a.author,a.author:visited,a.tumblr-link,a.tumblr-link:visited{color: #fff;}img{filter: brightness(.8) contrast(1.2);} #menu a { color: #fff; }`
-	modeCSS := `@media (prefers-color-scheme: dark) {` + nightModeCSS + `}`
-	if _, ok := req.URL.Query()["night-mode"]; ok {
-		modeCSS = nightModeCSS
-	}
 	title := strings.Join(settings.SelectedFeeds, ",")
 	if req.URL.Path == "" || req.URL.Path == "/" {
 		title = "everything"
 	} else if mux.Vars(req)["list"] != "" {
 		title = mux.Vars(req)["list"]
 	}
-	fmt.Fprintf(w, `<!doctype html>
-<html lang="en">
-<head>
-	<meta charset="utf-8" />
-	<meta name="viewport" content="width=device-width,minimum-scale=1,initial-scale=1" />
-	<meta name="color-scheme" content="dark light" />
-	<meta name="description" content="Mirror of %s feeds" />
-	<title>%s</title>
-	<style>body { margin: 0; } #menu { --blue: 0, 0, 255; background: linear-gradient(to right, rgba(var(--blue), 0.1), pink); font-family: monospace; font-size: large; font-weight: bold; } #menu ul { display: flex; list-style-type: none; padding-left: 0; padding: 0.3em; margin: 0 auto; max-width: 69em; } #menu ul li { padding-left: 0.5em; } #menu ul li:first-of-type { padding-left: 0; flex-grow: 4; }</style>
-	<style>.jumper { font-size: 2em; float: right; text-decoration: none; }.jump-to-top { position: sticky; bottom: 0.25em; }blockquote, figure { margin: 0; }blockquote:not(:last-child) { border-bottom: 1px solid #ddd; } blockquote.question{padding-left: 2em;}blockquote.question ::before, blockquote.question ::after { content: "“"; font-family: serif; font-size: x-large; }#content { scroll-behavior: smooth; font-family: sans-serif; overflow-wrap: break-word; margin: 8px; }article,details:not([open]){ border-bottom: 1px solid black; padding-bottom: 1em; margin-bottom: 1em; }article h1 a, article h4 a { text-decoration: none; border-bottom: 1px dotted black; }.tags { list-style: none; padding: 0; color: #666; }.tags li, .tags display, tags display[open] { display: inline }.tags a, .tags a:visited{color: #333; text-decoration: none;}img:not(.avatar), video, iframe { max-width: 100%%; height: auto; object-fit: contain }@media (min-width: 60em) { #content { margin: 0 auto; max-width: 60em; } img:not(.avatar), video { max-height: 50vh; width: auto; object-fit: contain; } img:hover:not(.avatar)}.avatar{width: 1em;height: 1em;vertical-align: middle;display:inline-block;}a.author,a.author:visited,a.tumblr-link,a.tumblr-link:visited{color: #000; font-weight: bold;}a.tumblr-link{padding: 0.5em; text-decoration: none; font-size: larger; vertical-align: middle;}.next-page { display: flex; justify-content: center; padding: 1em; }.ao3 dl dt, .ao3 dl dd { display: inline; margin-left: 0}.ao3 blockquote { border: none; }textarea{ width: 100%%; }%s</style>
-	<link rel="preconnect" href="https://64.media.tumblr.com/" />
-	<link rel="manifest" href="/manifest.webmanifest" />
-	<meta name="theme-color" content="#222222" />
-	<link rel="icon" href="/favicon.png" />
-</head>
 
-<body>
+	htmlPrelude(w, req, title, "Mirror of "+title+" feeds")
 
-<nav id="menu">
-	<ul>
-		<li><a href="/" title="Alternative Tumblr (and Twitter, Instagram, AO3, RSS, ...) frontend."><img style="height: 1em; vertical-align: sub;" src="/favicon.png" /> numblr</a></li>
-
-		<li><a href="/about" title="wtf is this?!">/about</a></li>
-		<li><a href="/changes">/changes</a></li>
-		<li><a href="https://github.com/heyLu/numblr">/source-code</a></li>
-	</ul>
-</nav>
-
-<div id="content">
-
-<a class="jumper" href="#bottom">▾</a>
+	fmt.Fprintf(w, `<a class="jumper" href="#bottom">▾</a>
 
 <h1>%s</h1>
 
-`, title, title, modeCSS, title)
+`, title)
 
 	fmt.Fprintf(w, `<form method="GET" action=%q><input aria-label="visit feed" name="feed" type="search" value="" placeholder="feed" list="feeds" /></form>`, req.URL.Path)
 	fmt.Fprintln(w, `<datalist id="feeds">`)
