@@ -9,6 +9,8 @@ Inspired by [nitter](https://github.com/zedeus/nitter).
 
 ![screenshot of the main page](./screenshot.png)
 
+See [help](./help.md) for more details!
+
 ## Principles
 
 - does not store any personal data on the server

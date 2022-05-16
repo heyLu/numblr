@@ -90,6 +90,9 @@ var ReadmeBytes []byte
 //go:embed CHANGELOG.md
 var ChangelogBytes []byte
 
+//go:embed help.md
+var HelpBytes []byte
+
 var cacheFn CacheFn = NewCached
 
 var cache *lru.Cache
@@ -291,7 +294,21 @@ self.addEventListener('install', function(e) {
 
 		err := goldmark.Convert(ChangelogBytes, w)
 		if err != nil {
-			log.Printf("Could not render about page: %s", err)
+			log.Printf("Could not render changes page: %s", err)
+
+		}
+	})
+
+	router.HandleFunc("/help.md", func(w http.ResponseWriter, req *http.Request) {
+		http.Redirect(w, req, "/hjälp", http.StatusTemporaryRedirect)
+	})
+
+	router.HandleFunc("/hjälp", func(w http.ResponseWriter, req *http.Request) {
+		htmlPrelude(w, req, "hjälp", "hjälp")
+
+		err := goldmark.Convert(HelpBytes, w)
+		if err != nil {
+			log.Printf("Could not render hjälp page: %s", err)
 
 		}
 	})
@@ -401,6 +418,7 @@ func htmlPrelude(w http.ResponseWriter, req *http.Request, title, description st
 
 		<li><a href="/about" title="wtf is this?!">/about</a></li>
 		<li><a href="/changes">/changes</a></li>
+		<li lang="sv"><a href="/hjälp">/hjälp</a></li>
 		<li><a href="https://github.com/heyLu/numblr">/source</a></li>
 	</ul>
 </nav>
