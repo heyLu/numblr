@@ -1252,12 +1252,13 @@ func prettyDuration(dur time.Duration) string {
 
 func HandlePost(w http.ResponseWriter, req *http.Request) {
 	tumblr := mux.Vars(req)["tumblr"]
-	postId := mux.Vars(req)["postId"]
+	postID := mux.Vars(req)["postId"]
 	slug := mux.Vars(req)["slug"]
 	if slug != "" {
 		slug = "/" + slug
 	}
-	req, err := http.NewRequestWithContext(req.Context(), "GET", fmt.Sprintf("https://%s.tumblr.com/post/%s%s", tumblr, postId, slug), nil)
+	tumblrURL := fmt.Sprintf("https://%s.tumblr.com/post/%s%s", tumblr, postID, slug)
+	req, err := http.NewRequestWithContext(req.Context(), "GET", tumblrURL, nil)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Error: could not create request: %s", err), http.StatusInternalServerError)
 		return
@@ -1269,25 +1270,9 @@ func HandlePost(w http.ResponseWriter, req *http.Request) {
 	}
 	defer resp.Body.Close()
 
-	nightModeCSS := `* { color: #fff !important; background-color: #222 !important; }.tags { color: #b7b7b7 }a { color: pink; }a:visited { color: #a67070; }article{ border-bottom: 1px solid #666; }blockquote:not(:last-child) { border-bottom: 1px solid #333; }a.author,a.author:visited{color: #fff;}`
-	modeCSS := `@media (prefers-color-scheme: dark) {` + nightModeCSS + `}`
-	if _, ok := req.URL.Query()["night-mode"]; ok {
-		modeCSS = nightModeCSS
-	}
-	fmt.Fprintf(w, `<!doctype html>
-<html>
-<head>
-	<meta charset="utf-8" />
-	<meta name="viewport" content="width=device-width,minimum-scale=1,initial-scale=1" />
-
-	<link rel="icon" href=%q />
-
-	<style>h1 { word-break: break-all; }blockquote, figure { margin: 0; }blockquote:not(:last-child) { border-bottom: 1px solid #ddd; } blockquote > blockquote:nth-child(1) { border-bottom: 0; }body { font-family: sans-serif; }article{ border-bottom: 1px solid black; padding: 1em 0; }.tags { list-style: none; padding: 0; color: #666; }.tags > li { display: inline }img, video, iframe { max-width: 95vw; }@media (min-width: 60em) { body { margin: 0 auto; max-width: 60em; } article { max-width: 60em; } img, video { max-height: 50vh; width: auto; } img:hover, .avatar{height: 1em;}a.author,a.author:visited{color: #000;}%s</style>
-	<style>.post-reblog-header img { height: 1em; vertical-align: middle; }.post-reblog-header .post-avatar { display: inline-block; }.post-reblog-header .post-tumblelog-name:after { content: ":"; }</style>
-</head>
-
-<body>
-`, "/avatar/"+tumblr, modeCSS)
+	// TODO: bring back correct avatar: "<link rel="icon" href="/avatar/<name-here>" />
+	// TODO: bring back special styles (?)
+	htmlPrelude(w, req, fmt.Sprintf("%s - %s", tumblr, slug), req.URL.String())
 
 	node, err := html.Parse(resp.Body)
 	if err != nil {
@@ -1428,6 +1413,10 @@ func HandlePost(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 	f(node)
+
+	fmt.Fprintf(w, `<hr />
+<a href=%q>View on Tumblr</a>
+`, tumblrURL)
 }
 
 func fetchPhotoset(ctx context.Context, tumblr string, photosetPath string) ([]*html.Node, error) {
