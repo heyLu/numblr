@@ -130,6 +130,12 @@ func main() {
 		Transport: http.DefaultTransport,
 	}
 
+	if config.CollectStats {
+		EnableStats(20, 20, 20)
+
+		log.SetOutput(io.MultiWriter(os.Stdout, &CollectLogsWriter{}))
+	}
+
 	// TODO: unify in-memory cache and database into a pluggable interface
 	if config.DatabasePath != "" {
 		db, err := InitDatabase(config.DatabasePath)
@@ -222,12 +228,6 @@ func main() {
 	router.Use(strictTransportSecurity)
 
 	router.Handle("/stats", http.HandlerFunc(StatsHandler))
-	if config.CollectStats {
-		EnableStats(20, 20, 20)
-
-		log.SetOutput(io.MultiWriter(os.Stdout, &CollectLogsWriter{}))
-
-	}
 
 	router.HandleFunc("/favicon.ico", func(w http.ResponseWriter, req *http.Request) {
 		http.Redirect(w, req, "/favicon.png", http.StatusPermanentRedirect)
