@@ -23,6 +23,7 @@ spec:
       containers:
       - name: numblr
         image: ghcr.io/heylu/numblr:main
+        imagePullPolicy: Always # image tag is `main`, so pull always to get the latest one
         args:
           - /app/numblr
           - -addr=0.0.0.0:5555
