@@ -8,6 +8,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: numblr
+  namespace: default
   labels:
     app: numblr
 spec:
@@ -66,6 +67,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: numblr
+  namespace: default
 spec:
   selector:
     app: numblr
