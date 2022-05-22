@@ -1,0 +1,75 @@
+# Example Kubernetes deployment with persistent storage.
+#
+# 1 replica and 10Gi of storage can handle pretty heavy usage by at least one
+# user, i.e. the main dev of numblr 👻.  (Although that usage is on a regular
+# VM so far, maybe they will try out running it in production on Kubernetes
+# sometime soon, given the existence of this file. ✨)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: numblr
+  labels:
+    app: numblr
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: numblr
+  template:
+    metadata:
+      labels:
+        app: numblr
+    spec:
+      containers:
+      - name: numblr
+        image: ghcr.io/heylu/numblr:main
+        args:
+          - /app/numblr
+          - -addr=0.0.0.0:5555
+          - -db=/app/data/cache.db
+          - -stats
+        readinessProbe:
+          httpGet:
+            path: /about
+            port: http
+        volumeMounts:
+        - name: data
+          mountPath: /app/data
+        ports:
+        - name: http
+          containerPort: 5555
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: numblr-volume
+---
+# Persistent storage for faster access and history.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: numblr-volume
+  namespace: default
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 10Gi
+---
+# Expose on port 15555 to the host.
+#
+# With this setup the port is then routed outside the host in some other way,
+# e.g. using Caddy outside of Kubernetes.
+apiVersion: v1
+kind: Service
+metadata:
+  name: numblr
+spec:
+  selector:
+    app: numblr
+  ports:
+    - protocol: TCP
+      port: 15555
+      targetPort: http
+  type: LoadBalancer
