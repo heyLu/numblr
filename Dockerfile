@@ -10,6 +10,9 @@ RUN go build .
 
 FROM alpine:3.15
 
+RUN apk add --no-cache shadow && useradd --home-dir /dev/null --shell /bin/false numblr && apk del shadow
+USER numblr
+
 VOLUME /app/data
 
 CMD /app/numblr -addr 0.0.0.0:5555
