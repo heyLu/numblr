@@ -86,7 +86,7 @@ func NewDatabaseCached(ctx context.Context, db *sql.DB, name string, uncachedFn 
 	}
 
 	isCached := err != sql.ErrNoRows
-	if !search.ForceFresh && (isCached && time.Since(cachedAt) < CacheTime || feedError != nil) {
+	if !search.ForceFresh && (isCached && time.Since(cachedAt) < CacheTime || feedError != nil && *feedError != "") {
 		var rows *sql.Rows
 		if search.BeforeID != "" {
 			if search.NoReblogs {
