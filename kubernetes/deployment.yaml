@@ -28,6 +28,7 @@ spec:
         args:
           - /app/numblr
           - -addr=0.0.0.0:5555
+          - -debug-addr=0.0.0.0:6060
           - -db=/app/data/cache.db
           - -stats
         readinessProbe:
@@ -40,6 +41,8 @@ spec:
         ports:
         - name: http
           containerPort: 5555
+        - name: debug
+          containerPort: 6060
       volumes:
       - name: data
         persistentVolumeClaim:
