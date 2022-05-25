@@ -15,9 +15,19 @@ import (
 )
 
 func InitDatabase(dbPath string) (*sql.DB, error) {
-	db, err := sql.Open("sqlite3", "file:"+dbPath+"?_journal_mode=WAL&_busy_timeout=50")
+	if dbPath == "" {
+		dbPath = "file::memory:?mode=memory&cache=shared"
+	} else if !strings.HasPrefix(config.DatabasePath, "file:") {
+		dbPath = "file:" + dbPath + "?_journal_mode=WAL&_busy_timeout=50"
+	}
+
+	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
 		return nil, fmt.Errorf("open: %w", err)
+	}
+
+	if strings.Contains(dbPath, ":memory:") {
+		db.SetConnMaxLifetime(0)
 	}
 
 	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS feed_infos ( name TEXT PRIMARY KEY, url TEXT, cached_at DATE, description TEXT, error TEXT )`)
@@ -70,18 +80,12 @@ func ListFeedsOlderThan(ctx context.Context, db *sql.DB, olderThan time.Time) ([
 }
 
 func NewDatabaseCached(ctx context.Context, db *sql.DB, name string, uncachedFn FeedFn, search Search) (Feed, error) {
-	tx, err := db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
-	if err != nil {
-		return nil, fmt.Errorf("begin tx: %w", err)
-	}
-
-	row := tx.QueryRowContext(ctx, "SELECT cached_at, url, error FROM feed_infos WHERE name = ?", name)
+	row := db.QueryRowContext(ctx, "SELECT cached_at, url, error FROM feed_infos WHERE name = ?", name)
 	var cachedAt time.Time
 	var url string
 	var feedError *string
-	err = row.Scan(&cachedAt, &url, &feedError)
+	err := row.Scan(&cachedAt, &url, &feedError)
 	if err != nil && err != sql.ErrNoRows {
-		tx.Rollback()
 		return nil, fmt.Errorf("looking up feed: %w", err)
 	}
 
@@ -90,22 +94,21 @@ func NewDatabaseCached(ctx context.Context, db *sql.DB, name string, uncachedFn 
 		var rows *sql.Rows
 		if search.BeforeID != "" {
 			if search.NoReblogs {
-				rows, err = tx.QueryContext(ctx, `SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? AND id < ? AND description_html NOT LIKE '%class="tumblr_blog"%' ORDER BY date DESC LIMIT 20`, name, search.BeforeID)
+				rows, err = db.QueryContext(ctx, `SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? AND id < ? AND description_html NOT LIKE '%class="tumblr_blog"%' ORDER BY date DESC LIMIT 20`, name, search.BeforeID)
 			} else {
-				rows, err = tx.QueryContext(ctx, "SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? AND id < ? ORDER BY date DESC LIMIT 20", name, search.BeforeID)
+				rows, err = db.QueryContext(ctx, "SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? AND id < ? ORDER BY date DESC LIMIT 20", name, search.BeforeID)
 			}
 		} else if len(search.Terms) > 0 {
 			match := "%" + search.Terms[0] + "%"
-			rows, err = tx.QueryContext(ctx, "SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? AND (title LIKE ? OR description_html LIKE ? OR tags LIKE ?) ORDER BY date DESC LIMIT 20", name, match, match, match)
+			rows, err = db.QueryContext(ctx, "SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? AND (title LIKE ? OR description_html LIKE ? OR tags LIKE ?) ORDER BY date DESC LIMIT 20", name, match, match, match)
 		} else {
 			if search.NoReblogs {
-				rows, err = tx.QueryContext(ctx, `SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? AND description_html NOT LIKE '%class="tumblr_blog"%' ORDER BY date DESC LIMIT 20`, name)
+				rows, err = db.QueryContext(ctx, `SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? AND description_html NOT LIKE '%class="tumblr_blog"%' ORDER BY date DESC LIMIT 20`, name)
 			} else {
-				rows, err = tx.QueryContext(ctx, "SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? ORDER BY date DESC LIMIT 20", name)
+				rows, err = db.QueryContext(ctx, "SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? ORDER BY date DESC LIMIT 20", name)
 			}
 		}
 		if err != nil {
-			tx.Rollback()
 			return nil, fmt.Errorf("querying posts: %w", err)
 		}
 
@@ -117,18 +120,14 @@ func NewDatabaseCached(ctx context.Context, db *sql.DB, name string, uncachedFn 
 	}
 
 	if name == "random" {
-		rows, err := tx.QueryContext(ctx, "SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author IN (SELECT name FROM feed_infos ORDER BY RANDOM() LIMIT 20) GROUP BY author ORDER BY RANDOM() LIMIT 20", name)
+		rows, err := db.QueryContext(ctx, "SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author IN (SELECT name FROM feed_infos ORDER BY RANDOM() LIMIT 20) GROUP BY author ORDER BY RANDOM() LIMIT 20", name)
 		if err != nil {
-			tx.Rollback()
 			return nil, fmt.Errorf("querying posts: %w", err)
 		}
 
 		return &databaseCached{name: name, url: url, rows: rows}, nil
 
 	}
-
-	// close readonly tx, open new one later when saving
-	tx.Rollback()
 
 	cancel := func() {}
 
@@ -152,7 +151,6 @@ func NewDatabaseCached(ctx context.Context, db *sql.DB, name string, uncachedFn 
 				rows, err = db.QueryContext(ctx, "SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? ORDER BY date DESC LIMIT 20", name)
 			}
 			if err != nil {
-				tx.Rollback()
 				return nil, fmt.Errorf("querying posts: %w", err)
 			}
 
@@ -175,7 +173,6 @@ func NewDatabaseCached(ctx context.Context, db *sql.DB, name string, uncachedFn 
 				rows, err = db.QueryContext(ctx, "SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? ORDER BY date DESC LIMIT 20", name)
 			}
 			if err != nil {
-				tx.Rollback()
 				return nil, fmt.Errorf("querying posts: %w", err)
 			}
 

@@ -95,9 +95,8 @@ var ChangelogBytes []byte
 //go:embed help.md
 var HelpBytes []byte
 
-var cacheFn CacheFn = NewCached
+var cacheFn CacheFn = nil
 
-var cache *lru.Cache
 var avatarCache *lru.Cache
 
 var httpClient = &http.Client{
@@ -139,88 +138,80 @@ func main() {
 		log.SetOutput(io.MultiWriter(os.Stdout, &CollectLogsWriter{}))
 	}
 
-	// TODO: unify in-memory cache and database into a pluggable interface
-	if config.DatabasePath != "" {
-		db, err := InitDatabase(config.DatabasePath)
-		if err != nil {
-			log.Fatalf("setup database: %s", err)
-		}
-
-		cacheFn = func(ctx context.Context, name string, uncachedFn FeedFn, search Search) (Feed, error) {
-			return NewDatabaseCached(ctx, db, name, uncachedFn, search)
-		}
-
-		if config.CollectStats {
-			EnableDatabaseStats(db, config.DatabasePath)
-		}
-
-		go func() {
-			maxConcurrentFeeds := make(chan bool, 100)
-
-			refreshFn := func() {
-				feeds, err := ListFeedsOlderThan(context.Background(), db, time.Now().Add(-CacheTime))
-				if err != nil {
-					log.Printf("Error: listing feeds in background: %s", err)
-					return
-				}
-
-				successfulFeeds := 0
-				for _, feedName := range feeds {
-					err := func(feedName string) error {
-						ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-						defer cancel()
-
-						feed, err := NewCachedFeed(ctx, feedName, cacheFn, Search{ForceFresh: true})
-						if err != nil {
-							return fmt.Errorf("background refresh: opening %s: %s", feedName, err)
-						}
-						maxConcurrentFeeds <- true
-						defer func() {
-							err := feed.Close()
-							if err != nil {
-								err = fmt.Errorf("background refresh: closing %s: %s", feedName, err)
-								CollectError(err)
-								log.Printf("Error: %s", err)
-							}
-							<-maxConcurrentFeeds
-						}()
-
-						_, err = feed.Next()
-						for err == nil {
-							_, err = feed.Next()
-						}
-
-						if err != nil && !errors.Is(err, io.EOF) {
-							return fmt.Errorf("background refresh: iterating %s: %s", feedName, err)
-						}
-
-						successfulFeeds++
-						return nil
-					}(feedName)
-					if err != nil {
-						CollectError(err)
-						log.Printf("Error: %s", err)
-					}
-				}
-
-				if len(feeds) > 0 {
-					log.Printf("Refreshed %d/%d feeds", successfulFeeds, len(feeds))
-				}
-			}
-
-			for {
-				go refreshFn()
-
-				time.Sleep(1 * time.Minute)
-			}
-		}()
-	}
-
-	var err error
-	cache, err = lru.New(100)
+	db, err := InitDatabase(config.DatabasePath)
 	if err != nil {
-		log.Fatal("setup cache:", err)
+		log.Fatalf("setup database: %s", err)
 	}
+
+	cacheFn = func(ctx context.Context, name string, uncachedFn FeedFn, search Search) (Feed, error) {
+		return NewDatabaseCached(ctx, db, name, uncachedFn, search)
+	}
+
+	if config.CollectStats {
+		EnableDatabaseStats(db, config.DatabasePath)
+	}
+
+	go func() {
+		maxConcurrentFeeds := make(chan bool, 100)
+
+		refreshFn := func() {
+			feeds, err := ListFeedsOlderThan(context.Background(), db, time.Now().Add(-CacheTime))
+			if err != nil {
+				log.Printf("Error: listing feeds in background: %s", err)
+				return
+			}
+
+			successfulFeeds := 0
+			for _, feedName := range feeds {
+				err := func(feedName string) error {
+					ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+					defer cancel()
+
+					feed, err := NewCachedFeed(ctx, feedName, cacheFn, Search{ForceFresh: true})
+					if err != nil {
+						return fmt.Errorf("background refresh: opening %s: %s", feedName, err)
+					}
+					maxConcurrentFeeds <- true
+					defer func() {
+						err := feed.Close()
+						if err != nil {
+							err = fmt.Errorf("background refresh: closing %s: %s", feedName, err)
+							CollectError(err)
+							log.Printf("Error: %s", err)
+						}
+						<-maxConcurrentFeeds
+					}()
+
+					_, err = feed.Next()
+					for err == nil {
+						_, err = feed.Next()
+					}
+
+					if err != nil && !errors.Is(err, io.EOF) {
+						return fmt.Errorf("background refresh: iterating %s: %s", feedName, err)
+					}
+
+					successfulFeeds++
+					return nil
+				}(feedName)
+				if err != nil {
+					CollectError(err)
+					log.Printf("Error: %s", err)
+				}
+			}
+
+			if len(feeds) > 0 {
+				log.Printf("Refreshed %d/%d feeds", successfulFeeds, len(feeds))
+			}
+		}
+
+		for {
+			go refreshFn()
+
+			time.Sleep(1 * time.Minute)
+		}
+	}()
+
 	avatarCache, err = lru.New(100)
 	if err != nil {
 		log.Fatal("setup avatar cache:", err)
@@ -1642,83 +1633,6 @@ func NewCachedFeed(ctx context.Context, name string, cacheFn CacheFn, search Sea
 	default:
 		return cacheFn(ctx, name, NewTumblrRSS, search)
 	}
-}
-
-func NewCached(ctx context.Context, name string, uncachedFn FeedFn, search Search) (Feed, error) {
-	cached, isCached := cache.Get(name)
-	if isCached && time.Since(cached.(*cachedFeed).cachedAt) < CacheTime {
-		feed := *cached.(*cachedFeed)
-		return &feed, nil
-	}
-	feed, err := uncachedFn(ctx, name, search)
-	if err != nil {
-		return nil, err
-	}
-	return &cachingTumblr{
-		uncached: feed,
-		cached: &cachedFeed{
-			cachedAt: time.Now(),
-			name:     name,
-			url:      feed.URL(),
-			posts:    make([]*Post, 0, 10),
-		},
-	}, nil
-}
-
-type cachingTumblr struct {
-	uncached Feed
-	cached   *cachedFeed
-}
-
-func (ct *cachingTumblr) Name() string {
-	return ct.uncached.Name()
-}
-
-func (ct *cachingTumblr) URL() string {
-	return ct.uncached.URL()
-}
-
-func (ct *cachingTumblr) Next() (*Post, error) {
-	post, err := ct.uncached.Next()
-	if err != nil {
-		return nil, err
-	}
-	ct.cached.posts = append(ct.cached.posts, post)
-	return post, nil
-}
-
-func (ct *cachingTumblr) Close() error {
-	cache.Add(ct.uncached.Name(), ct.cached)
-	return ct.uncached.Close()
-}
-
-type cachedFeed struct {
-	cachedAt time.Time
-	name     string
-	url      string
-	posts    []*Post
-}
-
-func (ct *cachedFeed) Name() string {
-	return ct.name
-}
-
-func (ct *cachedFeed) URL() string {
-	return ct.url
-}
-
-func (ct *cachedFeed) Next() (*Post, error) {
-	if len(ct.posts) == 0 {
-		return nil, fmt.Errorf("no more posts: %w", io.EOF)
-	}
-
-	post := ct.posts[0]
-	ct.posts = ct.posts[1:]
-	return post, nil
-}
-
-func (ct *cachedFeed) Close() error {
-	return nil
 }
 
 type sortByFunc struct {
