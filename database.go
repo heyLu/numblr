@@ -185,6 +185,9 @@ func isTimeoutError(err error) bool {
 	if strings.Contains(err.Error(), "Temporary failure in name resolution") {
 		return true
 	}
+	if strings.HasSuffix(err.Error(), "i/o timeout") {
+		return true
+	}
 	te, hasTimeout := err.(timeoutError)
 	if !hasTimeout {
 		return false
