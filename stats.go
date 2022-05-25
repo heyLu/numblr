@@ -21,6 +21,7 @@ type Stats struct {
 	NumFeeds  int
 	NumPosts  int
 	CacheSize int64
+	DBStats   sql.DBStats
 
 	RecentErrors []string
 	lastError    int
@@ -59,6 +60,8 @@ func EnableDatabaseStats(db *sql.DB, path string) {
 					return err
 				}
 				globalStats.CacheSize = fi.Size()
+
+				globalStats.DBStats = db.Stats()
 
 				row := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM feed_infos")
 				err = row.Scan(&globalStats.NumFeeds)
@@ -183,6 +186,17 @@ func StatsHandler(w http.ResponseWriter, req *http.Request) {
 	fmt.Fprintf(w, "posts: %d\n", globalStats.NumPosts)
 	fmt.Fprintf(w, "cache: %s\n", Bytes(globalStats.CacheSize))
 	fmt.Fprintf(w, "views: %d\n", globalStats.NumViews)
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "db:")
+	fmt.Fprintf(w, "  max:         %d\n", globalStats.DBStats.MaxOpenConnections)
+	fmt.Fprintf(w, "  conns:       %d\n", globalStats.DBStats.OpenConnections)
+	fmt.Fprintf(w, "  in-use:      %d\n", globalStats.DBStats.InUse)
+	fmt.Fprintf(w, "  idle:        %d\n", globalStats.DBStats.Idle)
+	fmt.Fprintf(w, "  wait-count:  %d\n", globalStats.DBStats.WaitCount)
+	fmt.Fprintf(w, "  wait-dur:    %s\n", globalStats.DBStats.WaitDuration)
+	fmt.Fprintf(w, "  idle-closed: %d\n", globalStats.DBStats.MaxIdleTimeClosed)
+	fmt.Fprintf(w, "  max-closed:  %d\n", globalStats.DBStats.MaxIdleClosed)
+	fmt.Fprintf(w, "  old-closed:  %d\n", globalStats.DBStats.MaxLifetimeClosed)
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "recent errors:")
 	for _, err := range globalStats.RecentErrors {
