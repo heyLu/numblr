@@ -497,6 +497,11 @@ func strictTransportSecurity(next http.Handler) http.Handler {
 	})
 }
 
+type FeedInfo struct {
+	Duration time.Duration
+	Error    error
+}
+
 func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 	start := time.Now()
 
@@ -522,25 +527,28 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 
 	var feed Feed
 	var err error
-	var feedTimingsMu sync.Mutex
-	feedTimings := make(map[string]time.Duration, len(settings.SelectedFeeds))
+	var feedInfoMu sync.Mutex
+	feedInfo := make(map[string]FeedInfo, len(settings.SelectedFeeds))
 	feeds := make([]Feed, len(settings.SelectedFeeds))
 	var wg sync.WaitGroup
 	wg.Add(len(settings.SelectedFeeds))
 	for i := range settings.SelectedFeeds {
 		go func(i int) {
+			var openErr error
 			defer func() {
 				wg.Done()
-				feedTimingsMu.Lock()
-				feedTimings[settings.SelectedFeeds[i]] = time.Since(start)
-				feedTimingsMu.Unlock()
+				feedInfoMu.Lock()
+				feedInfo[settings.SelectedFeeds[i]] = FeedInfo{
+					Duration: time.Since(start),
+					Error:    openErr,
+				}
+				feedInfoMu.Unlock()
 			}()
 
 			if strings.HasPrefix(settings.SelectedFeeds[i], ":") {
 				return
 			}
 
-			var openErr error
 			feeds[i], openErr = NewCachedFeed(req.Context(), settings.SelectedFeeds[i], cacheFn, search)
 			if openErr != nil {
 				err = fmt.Errorf("%s: %w", settings.SelectedFeeds[i], openErr)
@@ -600,6 +608,15 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 	if err != nil {
 		go CollectError(err)
 		log.Println("open:", err)
+		numErrors := 0
+		for _, info := range feedInfo {
+			if info.Error != nil {
+				numErrors++
+			}
+		}
+		if numErrors > 1 {
+			err = fmt.Errorf("%w (and %d more)", err, numErrors-1)
+		}
 		fmt.Fprintf(w, `<code style="color: red; font-weight: bold; font-size: larger;">could not load feed: %s</code>`, err)
 		if feed == nil {
 			return
@@ -913,14 +930,18 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 
 	fmt.Fprintf(w, `<hr /><footer>%d posts from %q (<a href=%q>source</a>) in %s (open: %s)</footer>`, postCount, feed.Name(), feed.URL(), time.Since(start).Round(time.Millisecond), openTime.Round(time.Millisecond))
 
-	feedsByTime := make([]string, 0, len(feedTimings))
-	for feed := range feedTimings {
+	feedsByTime := make([]string, 0, len(feedInfo))
+	for feed := range feedInfo {
 		feedsByTime = append(feedsByTime, feed)
 	}
-	sort.Sort(sort.Reverse(sortByFunc{strings: feedsByTime, lessFn: func(a, b string) bool { return feedTimings[a] < feedTimings[b] }}))
+	sort.Sort(sort.Reverse(sortByFunc{strings: feedsByTime, lessFn: func(a, b string) bool { return feedInfo[a].Duration < feedInfo[b].Duration }}))
 	fmt.Fprintln(w, `<details><summary>Performance details</summary><ol>`)
 	for _, feed := range feedsByTime {
-		fmt.Fprintf(w, `<li>%s (%s)</li>`, feed, feedTimings[feed])
+		errorInfo := ""
+		if feedInfo[feed].Error != nil {
+			errorInfo = fmt.Sprintf(" (<code style=\"font-size: smaller\">%s</code>)", feedInfo[feed].Error)
+		}
+		fmt.Fprintf(w, `<li>%s (%s)%s</li>`, feed, feedInfo[feed].Duration, errorInfo)
 	}
 	fmt.Fprintln(w, `</ol></details>`)
 
