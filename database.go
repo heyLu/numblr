@@ -109,7 +109,11 @@ func NewDatabaseCached(ctx context.Context, db *sql.DB, name string, uncachedFn 
 			return nil, fmt.Errorf("querying posts: %w", err)
 		}
 
-		return &databaseCached{name: name, url: url, rows: rows}, nil
+		notes := []string{"cached"}
+		if feedError != nil && *feedError != "" {
+			notes = []string{fmt.Sprintf("cached-by-error: %s", *feedError)}
+		}
+		return &databaseCached{name: name, url: url, rows: rows, notes: notes}, nil
 	}
 
 	if name == "random" {
@@ -152,7 +156,7 @@ func NewDatabaseCached(ctx context.Context, db *sql.DB, name string, uncachedFn 
 				return nil, fmt.Errorf("querying posts: %w", err)
 			}
 
-			return &databaseCached{name: name, url: url, outOfDate: true, rows: rows}, nil
+			return &databaseCached{name: name, url: url, outOfDate: true, rows: rows, notes: []string{"timeout"}}, nil
 		}
 
 		_, updateErr := db.Exec(`INSERT OR REPLACE INTO feed_infos VALUES (?, ?, ?, ?, ?)`, name, url, time.Now(), "", err.Error())
@@ -176,11 +180,12 @@ func NewDatabaseCached(ctx context.Context, db *sql.DB, name string, uncachedFn 
 				return nil, fmt.Errorf("querying posts: %w", err)
 			}
 
-			return &databaseCached{name: name, url: url, outOfDate: true, rows: rows}, nil
+			return &databaseCached{name: name, url: url, outOfDate: true, rows: rows, notes: []string{"not-found"}}, nil
 		}
 
 		return nil, fmt.Errorf("open uncached: %w", err)
 	}
+
 	return &databaseCaching{
 		db:       db,
 		uncached: feed,
@@ -313,6 +318,7 @@ type databaseCached struct {
 	name      string
 	url       string
 	outOfDate bool
+	notes     []string
 	rows      *sql.Rows
 	lastPost  *Post
 }
@@ -326,6 +332,10 @@ func (dc *databaseCached) Name() string {
 
 func (dc *databaseCached) URL() string {
 	return dc.url
+}
+
+func (dc *databaseCached) Notes() string {
+	return strings.Join(dc.notes, ",")
 }
 
 func (dc *databaseCached) Next() (*Post, error) {

@@ -500,6 +500,7 @@ func strictTransportSecurity(next http.Handler) http.Handler {
 type FeedInfo struct {
 	Duration time.Duration
 	Error    error
+	Feed     Feed
 }
 
 func HandleTumblr(w http.ResponseWriter, req *http.Request) {
@@ -541,6 +542,7 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 				feedInfo[settings.SelectedFeeds[i]] = FeedInfo{
 					Duration: time.Since(start),
 					Error:    openErr,
+					Feed:     feeds[i],
 				}
 				feedInfoMu.Unlock()
 			}()
@@ -941,7 +943,14 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 		if feedInfo[feed].Error != nil {
 			errorInfo = fmt.Sprintf(" (<code style=\"font-size: smaller\">%s</code>)", feedInfo[feed].Error)
 		}
-		fmt.Fprintf(w, `<li>%s (%s)%s</li>`, feed, feedInfo[feed].Duration, errorInfo)
+		notes := ""
+		if feedWithNotes, ok := feedInfo[feed].Feed.(Notes); ok {
+			notes = feedWithNotes.Notes()
+			if notes != "" {
+				notes = ", " + notes
+			}
+		}
+		fmt.Fprintf(w, `<li>%s (%s%s)%s</li>`, feed, feedInfo[feed].Duration, notes, errorInfo)
 	}
 	fmt.Fprintln(w, `</ol></details>`)
 
@@ -1607,6 +1616,10 @@ type Feed interface {
 	URL() string
 	Next() (*Post, error)
 	Close() error
+}
+
+type Notes interface {
+	Notes() string
 }
 
 type FeedFn func(ctx context.Context, name string, search Search) (Feed, error)
