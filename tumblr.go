@@ -35,6 +35,10 @@ func NewTumblrRSS(ctx context.Context, name string, _ Search) (Feed, error) {
 		return nil, fmt.Errorf("download: wrong response code: %d", resp.StatusCode)
 	}
 
+	if strings.HasPrefix(resp.Request.URL.Host, "www.tumblr.com") {
+		return nil, fmt.Errorf("download: was redirected, feed likely private (%s)", resp.Request.URL)
+	}
+
 	// TODO: use regular feed reader instead (slowness may come from here?  should actually test this theory)
 	dec := xml.NewDecoder(resp.Body)
 	token, err := dec.Token()
