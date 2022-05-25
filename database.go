@@ -167,7 +167,6 @@ func NewDatabaseCached(ctx context.Context, db *sql.DB, name string, uncachedFn 
 		}
 
 		if strings.HasSuffix(err.Error(), "wrong response code: 404") {
-			// TODO: indicate to user that this was a 404
 			var rows *sql.Rows
 			var err error
 			if search.BeforeID != "" {
