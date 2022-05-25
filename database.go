@@ -86,7 +86,7 @@ func NewDatabaseCached(ctx context.Context, db *sql.DB, name string, uncachedFn 
 	}
 
 	isCached := err != sql.ErrNoRows
-	if !search.ForceFresh && isCached && time.Since(cachedAt) < CacheTime {
+	if !search.ForceFresh && (isCached && time.Since(cachedAt) < CacheTime || feedError != nil) {
 		var rows *sql.Rows
 		if search.BeforeID != "" {
 			if search.NoReblogs {
@@ -155,6 +155,13 @@ func NewDatabaseCached(ctx context.Context, db *sql.DB, name string, uncachedFn 
 			return &databaseCached{name: name, url: url, outOfDate: true, rows: rows}, nil
 		}
 
+		_, updateErr := db.Exec(`INSERT OR REPLACE INTO feed_infos VALUES (?, ?, ?, ?, ?)`, name, url, time.Now(), "", err.Error())
+		if updateErr != nil {
+			updateErr = fmt.Errorf("update feed_infos after error: %w", updateErr)
+			CollectError(updateErr)
+			log.Printf("Error: %s", updateErr)
+		}
+
 		if strings.HasSuffix(err.Error(), "wrong response code: 404") {
 			// TODO: indicate to user that this was a 404
 			var rows *sql.Rows
@@ -170,13 +177,6 @@ func NewDatabaseCached(ctx context.Context, db *sql.DB, name string, uncachedFn 
 			}
 
 			return &databaseCached{name: name, url: url, outOfDate: true, rows: rows}, nil
-		}
-
-		_, updateErr := db.Exec(`INSERT OR REPLACE INTO feed_infos VALUES (?, ?, ?, ?, ?)`, name, url, time.Now(), "", err.Error())
-		if updateErr != nil {
-			updateErr = fmt.Errorf("update feed_infos after error: %w", updateErr)
-			CollectError(updateErr)
-			log.Printf("Error: %s", updateErr)
 		}
 
 		return nil, fmt.Errorf("open uncached: %w", err)
