@@ -10,6 +10,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/http/pprof"
 	"net/url"
 	"os"
 	"path"
@@ -66,6 +67,7 @@ const UserAgent = "numblr"
 var config struct {
 	Addr         string
 	DatabasePath string
+	DebugAddr    string
 
 	DefaultFeed string
 
@@ -117,6 +119,7 @@ func (uat *userAgentTransport) RoundTrip(req *http.Request) (*http.Response, err
 func main() {
 	flag.StringVar(&config.Addr, "addr", "localhost:5555", "Address to listen on")
 	flag.StringVar(&config.DatabasePath, "db", "", "Database path to use")
+	flag.StringVar(&config.DebugAddr, "debug-addr", "", "Address to listen on for debug interface (disable by default)")
 	flag.StringVar(&config.DefaultFeed, "default", "staff,engineering", "Default feeds to view")
 	flag.StringVar(&config.AppDisplayMode, "app-display", "browser", "Display mode to use when installed as an app")
 	flag.BoolVar(&config.CollectStats, "stats", false, "Whether to collect anonymized stats (num cached feeds & posts, recent errors & user agents")
@@ -379,10 +382,17 @@ self.addEventListener('install', function(e) {
 
 	router.HandleFunc("/avatar/{tumblr}", HandleAvatar)
 
-	http.Handle("/", router)
+	if config.DebugAddr != "" {
+		go func() {
+			debug := http.NewServeMux()
+			debug.HandleFunc("/debug/pprof/", pprof.Index)
+			log.Printf("Debug interface listening on on http://%s", config.DebugAddr)
+			log.Fatal(http.ListenAndServe(config.DebugAddr, nil))
+		}()
+	}
 
 	log.Printf("Listening on http://%s", config.Addr)
-	log.Fatal(http.ListenAndServe(config.Addr, nil))
+	log.Fatal(http.ListenAndServe(config.Addr, router))
 }
 
 func htmlPrelude(w http.ResponseWriter, req *http.Request, title, description string) {

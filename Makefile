@@ -9,10 +9,10 @@ favicon.png: favicon.svg
 	inkscape --export-width=192 --export-height=192 favicon.svg -o favicon.png
 
 reload_run:
-	git ls-files --cached --others | grep -v '_test.go$$' | grep -E '.(go|md)$$' | entr -c -r go run . -addr :5555 -stats
+	git ls-files --cached --others | grep -v '_test.go$$' | grep -E '.(go|md)$$' | entr -c -r go run . -addr :5555 -debug-addr :6060 -stats
 
 reload_run_db:
-	git ls-files --cached --others | grep -v '_test.go$$' | grep -E '.(go|md)$$' | entr -c -r go run . -addr :5556 -db cache.db -stats
+	git ls-files --cached --others | grep -v '_test.go$$' | grep -E '.(go|md)$$' | entr -c -r go run . -addr :5556 -debug-addr :6060 -db cache.db -stats
 
 reload_test:
 	git ls-files --cached --others | grep '.go$$' | entr -c -r go test .
