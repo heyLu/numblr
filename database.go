@@ -20,7 +20,7 @@ func InitDatabase(dbPath string) (*sql.DB, error) {
 		return nil, fmt.Errorf("open: %w", err)
 	}
 
-	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS feed_infos ( name TEXT PRIMARY KEY, url TEXT, cached_at DATE, description TEXT )`)
+	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS feed_infos ( name TEXT PRIMARY KEY, url TEXT, cached_at DATE, description TEXT, error TEXT )`)
 	if err != nil {
 		return nil, fmt.Errorf("setup feed_infos table: %w", err)
 	}
@@ -75,10 +75,11 @@ func NewDatabaseCached(ctx context.Context, db *sql.DB, name string, uncachedFn 
 		return nil, fmt.Errorf("begin tx: %w", err)
 	}
 
-	row := tx.QueryRowContext(ctx, "SELECT cached_at, url FROM feed_infos WHERE name = ?", name)
+	row := tx.QueryRowContext(ctx, "SELECT cached_at, url, error FROM feed_infos WHERE name = ?", name)
 	var cachedAt time.Time
 	var url string
-	err = row.Scan(&cachedAt, &url)
+	var feedError *string
+	err = row.Scan(&cachedAt, &url, &feedError)
 	if err != nil && err != sql.ErrNoRows {
 		tx.Rollback()
 		return nil, fmt.Errorf("looking up feed: %w", err)
@@ -169,6 +170,13 @@ func NewDatabaseCached(ctx context.Context, db *sql.DB, name string, uncachedFn 
 			}
 
 			return &databaseCached{name: name, url: url, outOfDate: true, rows: rows}, nil
+		}
+
+		_, updateErr := db.Exec(`INSERT OR REPLACE INTO feed_infos VALUES (?, ?, ?, ?, ?)`, name, url, time.Now(), "", err.Error())
+		if updateErr != nil {
+			updateErr = fmt.Errorf("update feed_infos after error: %w", updateErr)
+			CollectError(updateErr)
+			log.Printf("Error: %s", updateErr)
 		}
 
 		return nil, fmt.Errorf("open uncached: %w", err)
@@ -277,7 +285,7 @@ func (ct *databaseCaching) Save() error {
 		return fmt.Errorf("update posts: %w", err)
 	}
 
-	res, err = tx.Exec(`INSERT OR REPLACE INTO feed_infos VALUES (?, ?, ?, ?)`, ct.uncached.Name(), ct.uncached.URL(), ct.cachedAt, "")
+	res, err = tx.Exec(`INSERT OR REPLACE INTO feed_infos VALUES (?, ?, ?, ?, ?)`, ct.uncached.Name(), ct.uncached.URL(), ct.cachedAt, "", "")
 	if err != nil {
 		tx.Rollback()
 		return fmt.Errorf("update feed_infos: %w", err)
