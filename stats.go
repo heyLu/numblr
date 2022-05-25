@@ -53,8 +53,15 @@ func EnableDatabaseStats(db *sql.DB, path string) {
 			err := func() error {
 				ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 				defer cancel()
+
+				fi, err := os.Lstat(path)
+				if err != nil {
+					return err
+				}
+				globalStats.CacheSize = fi.Size()
+
 				row := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM feed_infos")
-				err := row.Scan(&globalStats.NumFeeds)
+				err = row.Scan(&globalStats.NumFeeds)
 				if err != nil {
 					return err
 				}
@@ -66,12 +73,6 @@ func EnableDatabaseStats(db *sql.DB, path string) {
 				if err != nil {
 					return err
 				}
-
-				fi, err := os.Lstat(path)
-				if err != nil {
-					return err
-				}
-				globalStats.CacheSize = fi.Size()
 
 				return nil
 			}()
