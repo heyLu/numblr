@@ -91,21 +91,28 @@ func NewDatabaseCached(ctx context.Context, db *sql.DB, name string, uncachedFn 
 
 	isCached := err != sql.ErrNoRows
 	if !search.ForceFresh && (isCached && time.Since(cachedAt) < CacheTime || feedError != nil && *feedError != "") {
+		notes := []string{"cached"}
+
 		var rows *sql.Rows
 		if search.BeforeID != "" {
 			if search.NoReblogs {
+				notes = append(notes, "noreblogs")
 				rows, err = db.QueryContext(ctx, `SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? AND id < ? AND description_html NOT LIKE '%class="tumblr_blog"%' ORDER BY date DESC LIMIT 20`, name, search.BeforeID)
 			} else {
 				rows, err = db.QueryContext(ctx, "SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? AND id < ? ORDER BY date DESC LIMIT 20", name, search.BeforeID)
 			}
 		} else if len(search.Terms) > 0 {
+			notes = append(notes, "search")
+
 			match := "%" + search.Terms[0] + "%"
 			rows, err = db.QueryContext(ctx, "SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? AND (title LIKE ? OR description_html LIKE ? OR tags LIKE ?) ORDER BY date DESC LIMIT 20", name, match, match, match)
 		} else if len(search.Tags) > 0 {
+			notes = append(notes, "tags")
 			// TODO: support filtering for multiple tags at once
 			rows, err = db.QueryContext(ctx, "SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? AND (tags LIKE ?) ORDER BY date DESC LIMIT 20", name, "%"+search.Tags[0]+"%")
 		} else {
 			if search.NoReblogs {
+				notes = append(notes, "noreblogs")
 				rows, err = db.QueryContext(ctx, `SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? AND description_html NOT LIKE '%class="tumblr_blog"%' ORDER BY date DESC LIMIT 20`, name)
 			} else {
 				rows, err = db.QueryContext(ctx, "SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? ORDER BY date DESC LIMIT 20", name)
@@ -115,7 +122,6 @@ func NewDatabaseCached(ctx context.Context, db *sql.DB, name string, uncachedFn 
 			return nil, fmt.Errorf("querying posts: %w", err)
 		}
 
-		notes := []string{"cached"}
 		if feedError != nil && *feedError != "" {
 			notes = []string{fmt.Sprintf("cached-by-error: %s", *feedError)}
 		}
