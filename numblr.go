@@ -405,7 +405,7 @@ func htmlPrelude(w http.ResponseWriter, req *http.Request, title, description st
 	<meta name="description" content="%s" />
 	<title>%s</title>
 	<style>body { margin: 0; } #menu { --blue: 0, 0, 255; background: linear-gradient(to right, rgba(var(--blue), 0.1), pink); font-family: monospace; font-size: large; font-weight: bold; } #menu ul { display: flex; list-style-type: none; padding-left: 0; padding: 0.3em; margin: 0 auto; max-width: 69em; } #menu ul li { padding-left: 0.75em; } #menu ul li:first-of-type { padding-left: 0; flex-grow: 4; }</style>
-	<style>header { margin-bottom: 1em; } header h1 { margin-bottom: 0; } header h2 { margin: auto 0; font-size: initial; font-weight: normal; }.jumper { font-size: 2em; float: right; text-decoration: none; }.jump-to-top { position: sticky; bottom: 0.25em; }blockquote, figure { margin: 0; }blockquote:not(:last-child) { border-bottom: 1px solid #ddd; } blockquote.question{padding-left: 2em;}blockquote.question ::before, blockquote.question ::after { content: "“"; font-family: serif; font-size: x-large; }#content { scroll-behavior: smooth; font-family: sans-serif; overflow-wrap: break-word; margin: 8px; }article,details:not([open]){ border-bottom: 1px solid black; padding-bottom: 1em; margin-bottom: 1em; }article h1 a, article h4 a { text-decoration: none; border-bottom: 1px dotted black; }.tags { list-style: none; padding: 0; color: #666; }.tags li, .tags display, tags display[open] { display: inline }.tags a, .tags a:visited{color: #333; text-decoration: none;}img:not(.avatar), video, iframe { max-width: 100%%; height: auto; object-fit: contain }@media (min-width: 60em) { #content { margin: 0 auto; max-width: 60em; } img:not(.avatar), video { max-height: 50vh; width: auto; object-fit: contain; } img:hover:not(.avatar)}.avatar{width: 1em;height: 1em;vertical-align: middle;display:inline-block;}a.author,a.author:visited,a.tumblr-link,a.tumblr-link:visited{color: #000; font-weight: bold;}a.tumblr-link{padding: 0.5em; text-decoration: none; font-size: larger; vertical-align: middle;}.next-page { display: flex; justify-content: center; padding: 1em; }.ao3 dl dt, .ao3 dl dd { display: inline; margin-left: 0}.ao3 blockquote { border: none; }textarea{ width: 100%%; }%s</style>
+	<style>header { margin-bottom: 1em; } header h1 { margin-bottom: 0; } header h2 { margin: auto 0; font-size: initial; font-weight: normal; }.jumper { font-size: 2em; float: right; text-decoration: none; }.jump-to-top { position: sticky; bottom: 0.25em; }blockquote, figure { margin: 0; }blockquote:not(:last-child) { border-bottom: 1px solid #ddd; } blockquote.question{padding-left: 2em;}blockquote.question ::before, blockquote.question ::after { content: "“"; font-family: serif; font-size: x-large; }#content { scroll-behavior: smooth; font-family: sans-serif; overflow-wrap: break-word; margin: 8px; }article,details:not([open]){ border-bottom: 1px solid black; padding-bottom: 1em; margin-bottom: 1em; }article h1 a, article h4 a { text-decoration: none; border-bottom: 1px dotted black; }section.hidden { opacity: 0.5; }.tags { list-style: none; padding: 0; color: #666; }.tags li, .tags display, tags display[open] { display: inline }.tags a, .tags a:visited{color: #333; text-decoration: none;}img:not(.avatar), video, iframe { max-width: 100%%; height: auto; object-fit: contain }@media (min-width: 60em) { #content { margin: 0 auto; max-width: 60em; } img:not(.avatar), video { max-height: 50vh; width: auto; object-fit: contain; } img:hover:not(.avatar)}.avatar{width: 1em;height: 1em;vertical-align: middle;display:inline-block;}a.author,a.author:visited,a.tumblr-link,a.tumblr-link:visited{color: #000; font-weight: bold;}a.tumblr-link{padding: 0.5em; text-decoration: none; font-size: larger; vertical-align: middle;}.next-page { display: flex; justify-content: center; padding: 1em; }.ao3 dl dt, .ao3 dl dd { display: inline; margin-left: 0}.ao3 blockquote { border: none; }textarea{ width: 100%%; }%s</style>
 	<link rel="preconnect" href="https://64.media.tumblr.com/" />
 	<link rel="manifest" href="/manifest.webmanifest" />
 	<meta name="theme-color" content="#222222" />
@@ -643,11 +643,14 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 	postCount := 0
 	var post *Post
 	var lastPost *Post
-	nextPost := func() {
+	var nextPost func()
+	nextPost = func() {
 		lastPost = post
+
 		start := time.Now()
 		post, err = feed.Next()
 		dur := time.Since(start)
+
 		if dur > 200*time.Millisecond {
 			feedName := "unknown"
 			if post != nil {
@@ -657,6 +660,19 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 			info := feedInfo[feedName]
 			info.Duration += dur
 			feedInfo[feedName] = info
+		}
+
+		if post == nil || err != nil {
+			return
+		}
+
+		if settings.GlobalSearch.Skip && !settings.GlobalSearch.Matches(post) {
+			nextPost()
+			return
+		}
+
+		if filter, hasFilter := settings.Searches[post.Author]; hasFilter && filter.Skip && !filter.Matches(post) {
+			nextPost()
 		}
 	}
 
@@ -716,6 +732,17 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 
 			classes = append(classes, post.Source)
 
+			isHidden := false
+			postFilter, hasFilter := settings.Searches[post.Author]
+			if !settings.GlobalSearch.Matches(post) {
+				isHidden = true
+				classes = append(classes, "hidden")
+				postFilter = settings.GlobalSearch
+			} else if hasFilter && !postFilter.Matches(post) {
+				isHidden = true
+				classes = append(classes, "hidden")
+			}
+
 			fmt.Fprintf(w, `<article class=%q>`, strings.Join(classes, " "))
 			avatarURL := post.AvatarURL
 			if avatarURL == "" {
@@ -733,7 +760,8 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 				fmt.Fprintln(w, `</ul>`)
 			}
 
-			fmt.Fprintln(w, `<section class="post-content">`)
+			fmt.Fprintf(w, `<section class="post-content %s">`, strings.Join(classes, " "))
+			fmt.Fprintln(w)
 
 			postHTML := ""
 			if post.Title != "Photo" && !post.IsReblog() {
@@ -839,6 +867,10 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 				postHTML = termRE.ReplaceAllStringFunc(postHTML, func(repl string) string {
 					return "<mark>" + repl + "</mark>"
 				})
+			}
+
+			if isHidden {
+				postHTML = fmt.Sprintf("<p>hidden by %q</p>", strings.TrimSpace(postFilter.String()))
 			}
 
 			fmt.Fprint(w, postHTML)
@@ -1123,12 +1155,41 @@ type Search struct {
 	BeforeID string
 
 	NoReblogs    bool
+	Skip         bool
 	Terms        []string
 	Tags         []string
 	ExcludeTerms []string
 	ExcludeTags  []string
 
 	ForceFresh bool
+
+	termsRE         *regexp.Regexp
+	excludedTermsRE *regexp.Regexp
+}
+
+func (s *Search) String() string {
+	if !s.IsActive {
+		return ""
+	}
+
+	buf := new(bytes.Buffer)
+	if s.NoReblogs {
+		fmt.Fprint(buf, " noreblogs")
+	}
+	for _, term := range s.Terms {
+		fmt.Fprint(buf, " "+term)
+	}
+	for _, term := range s.ExcludeTerms {
+		fmt.Fprint(buf, " -"+term)
+	}
+	for _, tag := range s.Tags {
+		fmt.Fprint(buf, " "+tag)
+	}
+	for _, tag := range s.ExcludeTags {
+		fmt.Fprint(buf, " -"+tag)
+	}
+
+	return buf.String()
 }
 
 func (s *Search) Matches(p *Post) bool {
@@ -1155,15 +1216,28 @@ func (s *Search) Matches(p *Post) bool {
 		}
 	}
 
-	for _, term := range s.Terms {
-		if !strings.Contains(strings.ToLower(p.Title), term) && !strings.Contains(strings.ToLower(p.DescriptionHTML), term) {
+	if s.termsRE != nil {
+		if !s.termsRE.MatchString(p.Title) && !s.termsRE.MatchString(p.DescriptionHTML) {
 			return false
+		}
+	} else {
+		for _, term := range s.Terms {
+			if !strings.Contains(strings.ToLower(p.Title), term) && !strings.Contains(strings.ToLower(p.DescriptionHTML), term) {
+				return false
+			}
 		}
 	}
 
-	for _, term := range s.ExcludeTerms {
-		if strings.Contains(strings.ToLower(p.Title), term) || strings.Contains(strings.ToLower(p.DescriptionHTML), term) {
+	if s.excludedTermsRE != nil {
+		if s.excludedTermsRE.MatchString(p.Title) || s.excludedTermsRE.MatchString(p.DescriptionHTML) {
 			return false
+		}
+
+	} else {
+		for _, term := range s.ExcludeTerms {
+			if strings.Contains(strings.ToLower(p.Title), term) || strings.Contains(strings.ToLower(p.DescriptionHTML), term) {
+				return false
+			}
 		}
 	}
 
@@ -1182,14 +1256,22 @@ func contains(xs []string, contain string) bool {
 func parseSearch(req *http.Request) Search {
 	beforeParam := req.URL.Query().Get("before")
 
-	searchTerms := strings.Fields(req.URL.Query().Get("search"))
-	if beforeParam == "" && len(searchTerms) == 0 {
+	rawSearch := req.URL.Query().Get("search")
+	if beforeParam == "" && rawSearch == "" {
 		return Search{}
 	}
 
+	search := parseSearchTerms(req.URL.Query().Get("search"))
+	search.BeforeID = beforeParam
+
+	return search
+}
+
+func parseSearchTerms(rawSearch string) Search {
+	searchTerms := strings.Fields(rawSearch)
+
 	search := Search{
 		IsActive:     true,
-		BeforeID:     beforeParam,
 		Terms:        make([]string, 0, 1),
 		Tags:         make([]string, 0, 1),
 		ExcludeTags:  make([]string, 0, 1),
@@ -1198,8 +1280,12 @@ func parseSearch(req *http.Request) Search {
 
 	// TODO: allow tags with spaces (#This is fun #Other tag)
 	for _, searchTerm := range searchTerms {
-		if searchTerm == "noreblog" {
+		if searchTerm == "noreblog" || searchTerm == "noreblogs" {
 			search.NoReblogs = true
+			continue
+		}
+		if searchTerm == "skip" {
+			search.Skip = true
 			continue
 		}
 
@@ -1210,9 +1296,13 @@ func parseSearch(req *http.Request) Search {
 		}
 
 		tag := false
-		if searchTerm[0] == '#' {
+		if len(searchTerm) > 0 && searchTerm[0] == '#' {
 			tag = true
 			searchTerm = searchTerm[1:]
+		}
+
+		if searchTerm == "" {
+			continue
 		}
 
 		unescaped, err := url.QueryUnescape(searchTerm)
@@ -1234,6 +1324,23 @@ func parseSearch(req *http.Request) Search {
 		}
 	}
 
+	if len(search.Terms) > 0 {
+		termsRE, err := regexp.Compile(`(?i)\b(` + strings.Join(search.Terms, "|") + `)\b`)
+		if err == nil {
+			search.termsRE = termsRE
+		} else {
+			log.Printf("invalid search terms %q: %s", search.Terms, err)
+		}
+	}
+	if len(search.ExcludeTerms) > 0 {
+		excludedTermsRE, err := regexp.Compile(`(?i)\b(` + strings.Join(search.ExcludeTerms, "|") + `)\b`)
+		if err == nil {
+			search.excludedTermsRE = excludedTermsRE
+		} else {
+			log.Printf("invalid exclude terms %q: %s", search.ExcludeTerms, err)
+		}
+	}
+
 	return search
 }
 
@@ -1242,23 +1349,53 @@ type Settings struct {
 	// the index page, by specifying feeds in the url, or by being on a
 	// list page.
 	SelectedFeeds []string
+
+	// Searches are feed-specific searches that apply additional filters to
+	// specific feeds, e.g. when you want to filter out or filter on things
+	// from those feeds.
+	Searches map[string]Search
+
+	// GlobalSearch is a persistent search that applies to all feeds.
+	GlobalSearch Search
 }
 
 func SettingsFromRequest(req *http.Request) Settings {
 	settings := Settings{}
 
+	feeds := getFeeds(req)
+	settings.SelectedFeeds = make([]string, 0, len(feeds))
+	settings.Searches = make(map[string]Search)
+
+	for _, feed := range feeds {
+		parts := strings.SplitN(feed, " ", 2)
+		if len(parts) == 2 {
+			search := parseSearchTerms(parts[1])
+
+			if parts[0] == "*" {
+				settings.GlobalSearch = search
+				continue
+			}
+
+			settings.Searches[parts[0]] = search
+		}
+
+		settings.SelectedFeeds = append(settings.SelectedFeeds, parts[0])
+	}
+
+	return settings
+}
+
+func getFeeds(req *http.Request) []string {
 	isList := strings.HasPrefix(req.URL.Path, "/list/")
 
 	if req.URL.Query()["feeds"] != nil && len(req.URL.Query()["feeds"]) > 0 {
-		settings.SelectedFeeds = req.URL.Query()["feeds"]
-		return settings
+		return req.URL.Query()["feeds"]
 	}
 
 	// explicitely specified in url
 	feeds := req.URL.Path[1:]
 	if feeds != "" && !isList {
-		settings.SelectedFeeds = strings.Split(feeds, ",")
-		return settings
+		return strings.Split(feeds, ",")
 	}
 
 	cookieName := CookieName
@@ -1272,17 +1409,14 @@ func SettingsFromRequest(req *http.Request) Settings {
 		if err != http.ErrNoCookie {
 			log.Printf("getting cookie: %s", err)
 		}
-		settings.SelectedFeeds = strings.Split(config.DefaultFeed, ",")
-		return settings
+		return strings.Split(config.DefaultFeed, ",")
 	}
 
 	if cookie.Value != "" {
-		settings.SelectedFeeds = strings.Split(cookie.Value, ",")
-		return settings
+		return strings.Split(cookie.Value, ",")
 	}
 
-	settings.SelectedFeeds = strings.Split(config.DefaultFeed, ",")
-	return settings
+	return strings.Split(config.DefaultFeed, ",")
 }
 
 func prettyDuration(dur time.Duration) string {
