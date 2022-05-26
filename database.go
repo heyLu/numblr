@@ -100,9 +100,9 @@ func NewDatabaseCached(ctx context.Context, db *sql.DB, name string, uncachedFn 
 		if search.BeforeID != "" {
 			if search.NoReblogs {
 				notes = append(notes, "noreblogs")
-				rows, err = db.QueryContext(ctx, `SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? AND id < ? AND description_html NOT LIKE '%class="tumblr_blog"%' ORDER BY date DESC LIMIT 20`, name, search.BeforeID)
+				rows, err = db.QueryContext(ctx, `SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? AND id < ? AND description_html NOT LIKE '%class="tumblr_blog"%' ORDER BY id DESC LIMIT 20`, name, search.BeforeID)
 			} else {
-				rows, err = db.QueryContext(ctx, "SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? AND id < ? ORDER BY date DESC LIMIT 20", name, search.BeforeID)
+				rows, err = db.QueryContext(ctx, "SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? AND id < ? ORDER BY id DESC LIMIT 20", name, search.BeforeID)
 			}
 		} else if len(search.Terms) > 0 {
 			notes = append(notes, "search")
