@@ -101,6 +101,9 @@ func NewDatabaseCached(ctx context.Context, db *sql.DB, name string, uncachedFn 
 		} else if len(search.Terms) > 0 {
 			match := "%" + search.Terms[0] + "%"
 			rows, err = db.QueryContext(ctx, "SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? AND (title LIKE ? OR description_html LIKE ? OR tags LIKE ?) ORDER BY date DESC LIMIT 20", name, match, match, match)
+		} else if len(search.Tags) > 0 {
+			// TODO: support filtering for multiple tags at once
+			rows, err = db.QueryContext(ctx, "SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? AND (tags LIKE ?) ORDER BY date DESC LIMIT 20", name, "%"+search.Tags[0]+"%")
 		} else {
 			if search.NoReblogs {
 				rows, err = db.QueryContext(ctx, `SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? AND description_html NOT LIKE '%class="tumblr_blog"%' ORDER BY date DESC LIMIT 20`, name)

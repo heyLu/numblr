@@ -365,6 +365,7 @@ self.addEventListener('install', function(e) {
 	router.HandleFunc("/", HandleTumblr)
 	router.HandleFunc("/{feeds}", HandleTumblr)
 	router.HandleFunc("/{feeds}/", HandleTumblr)
+	router.HandleFunc("/{feeds}/tagged/{tag}", HandleTumblr)
 
 	router.HandleFunc("/list/{list}", HandleTumblr)
 
@@ -514,8 +515,18 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	tag := mux.Vars(req)["tag"]
+	if tag != "" {
+		req.URL.Path = strings.Replace(req.URL.Path, "/tagged/"+tag, "", 1)
+	}
+
 	settings := SettingsFromRequest(req)
 	search := parseSearch(req)
+
+	if tag != "" {
+		search.IsActive = true
+		search.Tags = append(search.Tags, strings.ToLower(tag))
+	}
 
 	var feed Feed
 	var err error
