@@ -39,13 +39,25 @@ func NewTumblrRSS(ctx context.Context, name string, _ Search) (Feed, error) {
 		return nil, fmt.Errorf("download: was redirected, feed likely private (%s)", resp.Request.URL)
 	}
 
+	var description string
+
 	// TODO: use regular feed reader instead (slowness may come from here?  should actually test this theory)
 	dec := xml.NewDecoder(resp.Body)
 	token, err := dec.Token()
 	for err == nil {
-		el, ok := token.(xml.EndElement)
-		if ok && el.Name.Local == "link" {
+		if el, ok := token.(xml.EndElement); ok && el.Name.Local == "link" {
 			break
+		}
+
+		if el, ok := token.(xml.StartElement); ok && el.Name.Local == "description" {
+			token, err = dec.Token()
+			if err != nil {
+				break
+			}
+
+			if desc, ok := token.(xml.CharData); ok && desc != nil {
+				description = string(desc)
+			}
 		}
 		token, err = dec.Token()
 	}
@@ -54,7 +66,7 @@ func NewTumblrRSS(ctx context.Context, name string, _ Search) (Feed, error) {
 		return nil, fmt.Errorf("skip token: %w", err)
 	}
 
-	return &tumblrRSS{name: name, r: resp.Body, dec: dec, dateFormat: TumblrDate}, nil
+	return &tumblrRSS{name: name, description: description, r: resp.Body, dec: dec, dateFormat: TumblrDate}, nil
 }
 
 type tumblrRSS struct {
