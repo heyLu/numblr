@@ -1569,6 +1569,10 @@ func (tm *tumblrMerger) Name() string {
 	return name
 }
 
+func (tm *tumblrMerger) Description() string {
+	return ""
+}
+
 func (tm *tumblrMerger) URL() string {
 	return ""
 }
@@ -1627,6 +1631,7 @@ func (tm *tumblrMerger) Close() error {
 
 type Feed interface {
 	Name() string
+	Description() string
 	URL() string
 	Next() (*Post, error)
 	Close() error

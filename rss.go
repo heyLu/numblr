@@ -139,6 +139,10 @@ func (rss *rss) Name() string {
 	return rss.name
 }
 
+func (rss *rss) Description() string {
+	return rss.feed.Description
+}
+
 func (rss *rss) URL() string {
 	return rss.feed.Link
 }

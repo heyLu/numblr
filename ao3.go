@@ -84,6 +84,10 @@ func (ao3 *ao3) Name() string {
 	return ao3.name
 }
 
+func (ao3 *ao3) Description() string {
+	return ""
+}
+
 func (ao3 *ao3) URL() string {
 	return ao3.name
 }

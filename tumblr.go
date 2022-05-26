@@ -58,14 +58,19 @@ func NewTumblrRSS(ctx context.Context, name string, _ Search) (Feed, error) {
 }
 
 type tumblrRSS struct {
-	name       string
-	r          io.ReadCloser
-	dec        *xml.Decoder
-	dateFormat string
+	name        string
+	description string
+	r           io.ReadCloser
+	dec         *xml.Decoder
+	dateFormat  string
 }
 
 func (tr *tumblrRSS) Name() string {
 	return tr.name
+}
+
+func (tr *tumblrRSS) Description() string {
+	return tr.description
 }
 
 func (tr *tumblrRSS) URL() string {

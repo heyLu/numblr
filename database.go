@@ -83,11 +83,12 @@ func ListFeedsOlderThan(ctx context.Context, db *sql.DB, olderThan time.Time) ([
 }
 
 func NewDatabaseCached(ctx context.Context, db *sql.DB, name string, uncachedFn FeedFn, search Search) (Feed, error) {
-	row := db.QueryRowContext(ctx, "SELECT cached_at, url, error FROM feed_infos WHERE name = ?", name)
+	row := db.QueryRowContext(ctx, "SELECT cached_at, url, description, error FROM feed_infos WHERE name = ?", name)
 	var cachedAt time.Time
 	var url string
+	var description string
 	var feedError *string
-	err := row.Scan(&cachedAt, &url, &feedError)
+	err := row.Scan(&cachedAt, &url, &description, &feedError)
 	if err != nil && err != sql.ErrNoRows {
 		return nil, fmt.Errorf("looking up feed: %w", err)
 	}
@@ -128,7 +129,7 @@ func NewDatabaseCached(ctx context.Context, db *sql.DB, name string, uncachedFn 
 		if feedError != nil && *feedError != "" {
 			notes = []string{fmt.Sprintf("cached-by-error: %s", *feedError)}
 		}
-		return &databaseCached{name: name, url: url, rows: rows, notes: notes}, nil
+		return &databaseCached{name: name, description: description, url: url, rows: rows, notes: notes}, nil
 	}
 
 	if name == "random" {
@@ -137,7 +138,7 @@ func NewDatabaseCached(ctx context.Context, db *sql.DB, name string, uncachedFn 
 			return nil, fmt.Errorf("querying posts: %w", err)
 		}
 
-		return &databaseCached{name: name, url: url, rows: rows}, nil
+		return &databaseCached{name: name, description: description, url: url, rows: rows}, nil
 
 	}
 
@@ -166,10 +167,10 @@ func NewDatabaseCached(ctx context.Context, db *sql.DB, name string, uncachedFn 
 				return nil, fmt.Errorf("querying posts: %w", err)
 			}
 
-			return &databaseCached{name: name, url: url, outOfDate: true, rows: rows, notes: []string{"timeout"}}, nil
+			return &databaseCached{name: name, description: description, url: url, outOfDate: true, rows: rows, notes: []string{"timeout"}}, nil
 		}
 
-		_, updateErr := db.Exec(`INSERT OR REPLACE INTO feed_infos VALUES (?, ?, ?, ?, ?)`, name, url, time.Now(), "", err.Error())
+		_, updateErr := db.Exec(`INSERT OR REPLACE INTO feed_infos VALUES (?, ?, ?, ?, ?)`, name, url, time.Now(), description, err.Error())
 		if updateErr != nil {
 			updateErr = fmt.Errorf("update feed_infos after error: %w", updateErr)
 			CollectError(updateErr)
@@ -188,7 +189,7 @@ func NewDatabaseCached(ctx context.Context, db *sql.DB, name string, uncachedFn 
 				return nil, fmt.Errorf("querying posts: %w", err)
 			}
 
-			return &databaseCached{name: name, url: url, outOfDate: true, rows: rows, notes: []string{"not-found"}}, nil
+			return &databaseCached{name: name, description: description, url: url, outOfDate: true, rows: rows, notes: []string{"not-found"}}, nil
 		}
 
 		return nil, fmt.Errorf("open uncached: %w", err)
@@ -229,6 +230,10 @@ type databaseCaching struct {
 
 func (ct *databaseCaching) Name() string {
 	return ct.uncached.Name()
+}
+
+func (ct *databaseCaching) Description() string {
+	return ct.uncached.Description()
 }
 
 func (ct *databaseCaching) URL() string {
@@ -298,7 +303,7 @@ func (ct *databaseCaching) Save() error {
 		return fmt.Errorf("update posts: %w", err)
 	}
 
-	res, err = tx.Exec(`INSERT OR REPLACE INTO feed_infos VALUES (?, ?, ?, ?, ?)`, ct.uncached.Name(), ct.uncached.URL(), ct.cachedAt, "", "")
+	res, err = tx.Exec(`INSERT OR REPLACE INTO feed_infos VALUES (?, ?, ?, ?, ?)`, ct.uncached.Name(), ct.uncached.URL(), ct.cachedAt, ct.uncached.Description(), "")
 	if err != nil {
 		tx.Rollback()
 		return fmt.Errorf("update feed_infos: %w", err)
@@ -322,13 +327,14 @@ func (ct *databaseCaching) Save() error {
 }
 
 type databaseCached struct {
-	cachedAt  time.Time
-	name      string
-	url       string
-	outOfDate bool
-	notes     []string
-	rows      *sql.Rows
-	lastPost  *Post
+	cachedAt    time.Time
+	name        string
+	description string
+	url         string
+	outOfDate   bool
+	notes       []string
+	rows        *sql.Rows
+	lastPost    *Post
 }
 
 func (dc *databaseCached) Name() string {
@@ -336,6 +342,10 @@ func (dc *databaseCached) Name() string {
 		return dc.lastPost.Author
 	}
 	return dc.name
+}
+
+func (dc *databaseCached) Description() string {
+	return dc.description
 }
 
 func (dc *databaseCached) URL() string {
