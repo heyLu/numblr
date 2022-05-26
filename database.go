@@ -26,6 +26,9 @@ func InitDatabase(dbPath string) (*sql.DB, error) {
 		return nil, fmt.Errorf("open: %w", err)
 	}
 
+	db.SetConnMaxLifetime(60 * time.Minute)
+	db.SetMaxIdleConns(100)
+
 	if strings.Contains(dbPath, ":memory:") {
 		db.SetConnMaxLifetime(0)
 	}
