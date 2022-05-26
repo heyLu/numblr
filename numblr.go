@@ -721,7 +721,7 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 			if avatarURL == "" {
 				avatarURL = "/avatar/" + post.Author
 			}
-			fmt.Fprintf(w, `<p><img class="avatar" src="%s" loading="lazy" /> <a class="author" title=%q href="/%s">%s</a>:<p>`, avatarURL, html.EscapeString(post.DescriptionHTML), post.Author, post.Author)
+			fmt.Fprintf(w, `<p><img class="avatar" src="%s" loading="lazy" /> <a class="author" title=%q href="/%s">%s</a>:<p>`, avatarURL, html.EscapeString(feedInfo[post.Author].Feed.Description()), post.Author, post.Author)
 
 			if len(post.Tags) > 0 {
 				fmt.Fprint(w, `<ul class="tags content-notes">`)
