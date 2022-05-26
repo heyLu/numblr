@@ -639,7 +639,15 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 	var lastPost *Post
 	nextPost := func() {
 		lastPost = post
+		start := time.Now()
 		post, err = feed.Next()
+		dur := time.Since(start)
+		if dur > 200*time.Millisecond {
+			log.Printf("slow next element for feed %q (%#v): %s", feed.Name(), search, dur)
+			info := feedInfo[feed.Name()]
+			info.Duration += dur
+			feedInfo[feed.Name()] = info
+		}
 	}
 
 	if search.BeforeID != "" {
