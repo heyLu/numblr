@@ -643,10 +643,14 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 		post, err = feed.Next()
 		dur := time.Since(start)
 		if dur > 200*time.Millisecond {
-			log.Printf("slow next element for feed %q (%#v): %s", feed.Name(), search, dur)
-			info := feedInfo[feed.Name()]
+			feedName := "unknown"
+			if post != nil {
+				feedName = post.Author
+			}
+			log.Printf("slow next element for feed %q (%#v): %s", feedName, search, dur)
+			info := feedInfo[feedName]
 			info.Duration += dur
-			feedInfo[feed.Name()] = info
+			feedInfo[feedName] = info
 		}
 	}
 
