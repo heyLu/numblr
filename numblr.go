@@ -1503,6 +1503,19 @@ func HandlePost(w http.ResponseWriter, req *http.Request) {
 
 							break
 						}
+						if attr.Key == "src" && strings.Contains(attr.Val, "/video/") {
+							videos, err := fetchVideo(req.Context(), tumblr, "/post/"+postID+slug, attr.Val)
+							if err != nil {
+								log.Printf("Error: Invalid video %q: %s", attr.Val, err)
+								break
+							}
+
+							for _, video := range videos {
+								node.InsertBefore(video, child)
+							}
+
+							break
+						}
 						if attr.Key == "src" && strings.Contains(attr.Val, "/audio_player_iframe/") {
 							u, err := url.Parse(attr.Val)
 							if err != nil {
@@ -1650,6 +1663,60 @@ func fetchPhotoset(ctx context.Context, tumblr string, photosetPath string) ([]*
 		for child := node.FirstChild; child != nil; child = child.NextSibling {
 			if child.Type == html.ElementNode && child.Data == "img" {
 				filterAttributes(child, "src")
+				node.RemoveChild(child)
+				nodes = append(nodes, child)
+				nodes = append(nodes, &html.Node{Type: html.ElementNode, Data: "br"})
+				continue
+			}
+
+			f(child)
+		}
+	}
+	f(node)
+
+	return nodes, nil
+}
+
+func fetchVideo(ctx context.Context, tumblr string, postPath string, videoPath string) ([]*html.Node, error) {
+	u, err := url.Parse(videoPath)
+	if err != nil {
+		return nil, fmt.Errorf("invalid url: %w", err)
+	}
+	u.Scheme = "https"
+	u.Host = tumblr + ".tumblr.com"
+
+	req, err := http.NewRequestWithContext(ctx, "GET", u.String(), nil)
+	if err != nil {
+		return nil, fmt.Errorf("new request: %w", err)
+	}
+	req.Header.Set("Referer", "https://"+u.Host+postPath)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("fetch: %w", err)
+	}
+	defer resp.Body.Close()
+
+	node, err := html.Parse(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("parse html: %w", err)
+	}
+
+	nodes := make([]*html.Node, 0, 10)
+
+	var f func(*html.Node)
+	f = func(node *html.Node) {
+		if node.Type == html.ElementNode {
+			switch node.Data {
+			case "video":
+				nodes = append(nodes, node)
+			}
+		}
+		for child := node.FirstChild; child != nil; child = child.NextSibling {
+			if child.Type == html.ElementNode && child.Data == "video" {
+				filterAttributes(child, "src", "poster")
+				child.Attr = append(child.Attr, html.Attribute{Key: "preload"})
+				child.Attr = append(child.Attr, html.Attribute{Key: "controls"})
 				node.RemoveChild(child)
 				nodes = append(nodes, child)
 				nodes = append(nodes, &html.Node{Type: html.ElementNode, Data: "br"})
