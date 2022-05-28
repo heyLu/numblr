@@ -1747,7 +1747,6 @@ func filterAttributes(node *html.Node, keepAttrs ...string) {
 			if attr.Key == keep {
 				attrs = append(attrs, attr)
 			}
-			break
 		}
 	}
 	node.Attr = attrs
