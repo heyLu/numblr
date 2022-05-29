@@ -897,10 +897,11 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 					}
 
 					tagLink := "/" + post.Author + "/tagged/" + tag
+					tag = "#" + tag
 					if tagFound {
 						tag = "<mark>" + tag + "</mark>"
 					}
-					fmt.Fprintf(w, `<li><a href=%q>#%s</a></li> `, tagLink, tag)
+					fmt.Fprintf(w, `<li><a href=%q>%s</a></li> `, tagLink, tag)
 				}
 				if len(post.Tags) >= TagsCollapseCount {
 					fmt.Fprintf(w, `</details>`)
