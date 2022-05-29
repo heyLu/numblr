@@ -1538,7 +1538,7 @@ func HandlePost(w http.ResponseWriter, req *http.Request) {
 
 					node.RemoveChild(child)
 					continue
-				case "script", "style":
+				case "script", "style", "form":
 					node.RemoveChild(child)
 					continue
 				case "figure":
