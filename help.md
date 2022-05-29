@@ -48,6 +48,43 @@ You may have noticed the `feeds=...` parameter used above, which can be used
 about restrictions regarding URL characters.  If a URL does not work, try it
 using `/?feeds=...`.
 
+## Filtering and blocking
+
+It is possible to filter feeds using the same syntax for searches, but either
+specific to single feeds or applying to all feeds at once.
+
+Generally the syntax is like this:
+
+    my-feed -wordidontwanttosee
+    my-feed -#tagidontwanttosee
+
+Unfortunately this only works for single words so far, so filtering multi-word
+phrases or tags does not work yet.
+
+Note that by default posts are hidden like tumblr does with a note about which
+filter has hidden this.  However, if you want to remove a post completely
+without you even knowing that it used to exist you can add `skip` to the
+filter:
+
+    my-feed -neverthisword skip
+
+That will remove posts that contain the phrase "neverthisword" completely from
+your feed.
+
+Here's a few concrete examples:
+
+- [staff -tipping](/staff -tipping)
+
+    This hides posts from staff that contain the word "tipping".
+- [staff -#features](/staff -%23features)
+
+    This hides posts from staff that have the tag `#features`.
+
+    Note that if you specify this via the URL manually you will need to encode
+    the `#` so that it can be part of a URL.  The escape code for that is `%23`
+    as used in the link.  This also applies to the `?feeds=...` parameter, but
+    not to setting the filter using the settings.
+
 ## There's more ...
 
 ... and unfortunately it is not documented yet.  If you find something you
