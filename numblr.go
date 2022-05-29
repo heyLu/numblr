@@ -541,7 +541,11 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 			defer func() {
 				wg.Done()
 				feedInfoMu.Lock()
-				feedInfo[settings.SelectedFeeds[i]] = FeedInfo{
+				feedName := settings.SelectedFeeds[i]
+				if feeds[i] != nil {
+					feedName = feeds[i].Name()
+				}
+				feedInfo[feedName] = FeedInfo{
 					Duration: time.Since(start),
 					Error:    openErr,
 					Feed:     feeds[i],
@@ -631,7 +635,7 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 	}()
 	openTime := time.Since(start)
 
-	if len(settings.SelectedFeeds) == 1 && feeds[0].Description() != "" {
+	if len(settings.SelectedFeeds) == 1 && feeds[0] != nil && feeds[0].Description() != "" {
 		fmt.Fprintf(w, "<h2 id=\"description\">%s</h2>\n", feeds[0].Description())
 	}
 	fmt.Fprintln(w, "</header>")
