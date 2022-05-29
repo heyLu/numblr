@@ -274,7 +274,7 @@ self.addEventListener('install', function(e) {
 	})
 
 	router.HandleFunc("/about", func(w http.ResponseWriter, req *http.Request) {
-		htmlPrelude(w, req, "about:numblr", "about:numblr")
+		htmlPrelude(w, req, "about:numblr", "about:numblr", "/favicon.png")
 
 		err := goldmark.Convert(ReadmeBytes, w)
 		if err != nil {
@@ -284,7 +284,7 @@ self.addEventListener('install', function(e) {
 	})
 
 	router.HandleFunc("/changes", func(w http.ResponseWriter, req *http.Request) {
-		htmlPrelude(w, req, "changes", "changes")
+		htmlPrelude(w, req, "changes", "changes", "/favicon.png")
 
 		err := goldmark.Convert(ChangelogBytes, w)
 		if err != nil {
@@ -298,7 +298,7 @@ self.addEventListener('install', function(e) {
 	})
 
 	router.HandleFunc("/hjälp", func(w http.ResponseWriter, req *http.Request) {
-		htmlPrelude(w, req, "hjälp", "hjälp")
+		htmlPrelude(w, req, "hjälp", "hjälp", "/favicon.png")
 
 		err := goldmark.Convert(HelpBytes, w)
 		if err != nil {
@@ -387,7 +387,7 @@ self.addEventListener('install', function(e) {
 	log.Fatal(http.ListenAndServe(config.Addr, router))
 }
 
-func htmlPrelude(w http.ResponseWriter, req *http.Request, title, description string) {
+func htmlPrelude(w http.ResponseWriter, req *http.Request, title, description, favicon string) {
 	w.Header().Set("Content-Type", `text/html; charset="utf-8"`)
 
 	nightModeCSS := `body { color: #fff; background-color: #222; }.tags a,.tags a:visited{ color: #b7b7b7; text-decoration: none;}a { color: pink; }a:visited { color: #a67070; }article,details:not([open]){ border-bottom: 1px solid #666; }blockquote:not(:last-child) { border-bottom: 1px solid #333; }a.author,a.author:visited,a.tumblr-link,a.tumblr-link:visited{color: #fff;}img{filter: brightness(.8) contrast(1.2);} #menu a { color: #fff; }`
@@ -409,7 +409,7 @@ func htmlPrelude(w http.ResponseWriter, req *http.Request, title, description st
 	<link rel="preconnect" href="https://64.media.tumblr.com/" />
 	<link rel="manifest" href="/manifest.webmanifest" />
 	<meta name="theme-color" content="#222222" />
-	<link rel="icon" href="/favicon.png" />
+	<link rel="icon" href="%s" />
 </head>
 
 <body>
@@ -426,7 +426,7 @@ func htmlPrelude(w http.ResponseWriter, req *http.Request, title, description st
 </nav>
 
 <div id="content">
-`, description, title, modeCSS)
+`, description, title, modeCSS, favicon)
 }
 
 func HandleAvatar(w http.ResponseWriter, req *http.Request) {
@@ -580,7 +580,7 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 		title = mux.Vars(req)["list"]
 	}
 
-	htmlPrelude(w, req, title, "Mirror of "+title+" feeds")
+	htmlPrelude(w, req, title, "Mirror of "+title+" feeds", "/favicon.png")
 
 	fmt.Fprintf(w, `<a class="jumper" href="#bottom">▾</a>
 
@@ -1464,9 +1464,8 @@ func HandlePost(w http.ResponseWriter, req *http.Request) {
 	}
 	defer resp.Body.Close()
 
-	// TODO: bring back correct avatar: "<link rel="icon" href="/avatar/<name-here>" />
 	// TODO: bring back special styles (?)
-	htmlPrelude(w, req, fmt.Sprintf("%s - %s", tumblr, slug), req.URL.String())
+	htmlPrelude(w, req, fmt.Sprintf("%s - %s", tumblr, slug), req.URL.String(), "/avatar/"+url.PathEscape(tumblr))
 
 	node, err := html.Parse(resp.Body)
 	if err != nil {
