@@ -83,6 +83,7 @@ func ListFeedsOlderThan(ctx context.Context, db *sql.DB, olderThan time.Time) ([
 }
 
 func NewDatabaseCached(ctx context.Context, db *sql.DB, name string, uncachedFn FeedFn, search Search) (Feed, error) {
+	// FIXME: cache non-canonical names correctly (e.g. oops@tumblr should be looked up as `oops`)
 	row := db.QueryRowContext(ctx, "SELECT cached_at, url, description, error FROM feed_infos WHERE name = ?", name)
 	var cachedAt time.Time
 	var url string
