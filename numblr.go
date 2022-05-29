@@ -859,9 +859,11 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 				}
 				return "/" + parts[2] + "@instagram"
 			})
-			postHTML = videoRE.ReplaceAllStringFunc(postHTML, func(repl string) string {
-				return `<video preload="metadata" controls="" `
-			})
+			if post.Source != "tiktok" {
+				postHTML = videoRE.ReplaceAllStringFunc(postHTML, func(repl string) string {
+					return `<video preload="metadata" controls="" `
+				})
+			}
 			postHTML = autoplayRE.ReplaceAllStringFunc(postHTML, func(repl string) string {
 				return ``
 			})
@@ -1867,6 +1869,8 @@ func NewCachedFeed(ctx context.Context, name string, cacheFn CacheFn, search Sea
 		return cacheFn(ctx, name, NewYoutube, search)
 	case strings.HasSuffix(name, "@tumblr"):
 		return cacheFn(ctx, name, NewTumblrRSS, search)
+	case strings.Contains(name, "www.tiktok.com") || strings.HasSuffix(name, "@tiktok"):
+		return cacheFn(ctx, name, NewTikTok, search)
 	case strings.Contains(name, "archiveofourown.org") || strings.HasSuffix(name, "@ao3"):
 		return cacheFn(ctx, name, NewAO3, search)
 	case strings.Contains(name, "@") || strings.Contains(name, "."):
