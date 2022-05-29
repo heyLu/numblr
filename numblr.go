@@ -580,7 +580,11 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 		title = mux.Vars(req)["list"]
 	}
 
-	htmlPrelude(w, req, title, "Mirror of "+title+" feeds", "/favicon.png")
+	favicon := "/favicon.png"
+	if len(settings.SelectedFeeds) == 1 {
+		favicon = "/avatar/" + url.PathEscape(settings.SelectedFeeds[0])
+	}
+	htmlPrelude(w, req, title, "Mirror of "+title+" feeds", favicon)
 
 	fmt.Fprintf(w, `<a class="jumper" href="#bottom">▾</a>
 
