@@ -60,6 +60,9 @@ type tiktokAccountData struct {
 			PlayCount    int `json:"playCount"`
 		} `json:"stats"`
 	} `json:"ItemModule"`
+	UserPage struct {
+		UniqueID string `json:"uniqueId"`
+	} `json:"UserPage"`
 }
 
 // NewTikTok fetches the feed for user `name` from TikTok.
@@ -101,6 +104,10 @@ func NewTikTok(ctx context.Context, name string, _ Search) (Feed, error) {
 	err = json.Unmarshal([]byte(accountDataEl[0].FirstChild.Data), &accountData)
 	if err != nil {
 		return nil, fmt.Errorf("parse account data: %w", err)
+	}
+
+	if accountData.UserPage.UniqueID != "" {
+		name = accountData.UserPage.UniqueID + "@tiktok"
 	}
 
 	return &tiktok{
