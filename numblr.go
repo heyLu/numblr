@@ -1581,6 +1581,8 @@ func HandlePost(w http.ResponseWriter, req *http.Request) {
 						case "href":
 							if strings.Contains(attr.Val, ".tumblr.com") {
 								attr.Val = tumblrToInternal(attr.Val)
+							} else if strings.HasPrefix(attr.Val, "https://href.li/?") {
+								attr.Val = attr.Val[len("https://href.li/?"):]
 							} else if attr.Val == "/" {
 								attr.Val = "/" + tumblr
 							} else if strings.HasPrefix(attr.Val, "/") {
