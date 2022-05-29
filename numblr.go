@@ -1187,10 +1187,10 @@ func (s *Search) String() string {
 		fmt.Fprint(buf, " -"+term)
 	}
 	for _, tag := range s.Tags {
-		fmt.Fprint(buf, " "+tag)
+		fmt.Fprint(buf, " #"+tag)
 	}
 	for _, tag := range s.ExcludeTags {
-		fmt.Fprint(buf, " -"+tag)
+		fmt.Fprint(buf, " -#"+tag)
 	}
 
 	return buf.String()
