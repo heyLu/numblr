@@ -1587,7 +1587,7 @@ func HandlePost(w http.ResponseWriter, req *http.Request) {
 								attr.Val = "/" + tumblr + attr.Val
 							}
 							attrs = append(attrs, attr)
-						case "src", "rel", "title", "alt", "class":
+						case "src", "rel", "title", "alt", "class", "style":
 							attrs = append(attrs, attr)
 						}
 					}
