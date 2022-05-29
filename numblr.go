@@ -1263,14 +1263,16 @@ func contains(xs []string, contain string) bool {
 
 func parseSearch(req *http.Request) Search {
 	beforeParam := req.URL.Query().Get("before")
+	forceFresh := req.URL.Query().Get("fresh") != ""
 
 	rawSearch := req.URL.Query().Get("search")
 	if beforeParam == "" && rawSearch == "" {
-		return Search{}
+		return Search{ForceFresh: forceFresh}
 	}
 
-	search := parseSearchTerms(req.URL.Query().Get("search"))
+	search := parseSearchTerms(rawSearch)
 	search.BeforeID = beforeParam
+	search.ForceFresh = forceFresh
 
 	return search
 }
