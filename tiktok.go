@@ -164,6 +164,13 @@ func (tt *tiktok) Next() (*Post, error) {
 
 	fmt.Fprintf(buf, `<p>%d ❤, %d 📮, %d 💬, %d 🎶`, postData.Stats.DiggCount, postData.Stats.ShareCount, postData.Stats.CommentCount, postData.Stats.PlayCount)
 
+	tags := make([]string, 0, 1)
+	for _, maybeTag := range strings.Fields(postData.Description) {
+		if len(maybeTag) > 2 && maybeTag[0] == '#' {
+			tags = append(tags, maybeTag[1:])
+		}
+	}
+
 	return &Post{
 		Source:          "tiktok",
 		ID:              id,
@@ -172,7 +179,7 @@ func (tt *tiktok) Next() (*Post, error) {
 		Author:          postData.Author + "@tiktok",
 		AvatarURL:       tt.accountData.SharingMeta.Value.Image,
 		DescriptionHTML: buf.String(),
-		Tags:            nil, // TODO: extract from description?
+		Tags:            tags,
 		DateString:      date.UTC().String(),
 		Date:            date.UTC(),
 	}, nil
