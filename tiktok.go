@@ -169,7 +169,7 @@ func (tt *tiktok) Next() (*Post, error) {
 		ID:              id,
 		URL:             "https://www.tiktok.com/@" + postData.Author + "/" + id,
 		Title:           "",
-		Author:          postData.Author,
+		Author:          postData.Author + "@tiktok",
 		AvatarURL:       tt.accountData.SharingMeta.Value.Image,
 		DescriptionHTML: buf.String(),
 		Tags:            nil, // TODO: extract from description?
