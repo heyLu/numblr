@@ -164,10 +164,18 @@ func (tt *tiktok) Next() (*Post, error) {
 		return postData.Video.SubtitleInfos[i].LanguageID < postData.Video.SubtitleInfos[j].LanguageID
 	})
 	for _, subtitle := range postData.Video.SubtitleInfos {
-		if subtitle.LanguageCodeName == "eng-US" {
-			fmt.Fprintf(buf, `	<track default kind="captions" srclang="en" label=%q src=%q data-translation-source=%q />`, subtitle.LanguageCodeName, subtitle.URL, subtitle.Source)
+		label := subtitle.LanguageCodeName
+		if subtitle.Source == "MT" {
+			label += " 🤖"
 		} else {
-			fmt.Fprintf(buf, `	<track kind="captions" label=%q src=%q data-translation-source=%q />`, subtitle.LanguageCodeName, subtitle.URL, subtitle.Source)
+			label += " (" + subtitle.Source + ")"
+		}
+
+		// note: proxy is necessary because `track` src must be same-origin (crossorigin does not work because of tiktok's CORS headers)
+		if subtitle.LanguageCodeName == "eng-US" {
+			fmt.Fprintf(buf, `	<track default kind="captions" srclang="en" label=%q src=%q />`, label, "/proxy?url="+subtitle.URL)
+		} else {
+			fmt.Fprintf(buf, `	<track kind="captions" label=%q src=%q />`, label, "/proxy?url="+subtitle.URL)
 		}
 		fmt.Fprintln(buf)
 

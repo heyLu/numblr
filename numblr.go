@@ -362,6 +362,29 @@ self.addEventListener('install', function(e) {
 		http.Redirect(w, req, "/", http.StatusSeeOther)
 	}).Methods("POST")
 
+	router.HandleFunc("/proxy", func(w http.ResponseWriter, req *http.Request) {
+		proxyURL := req.URL.Query().Get("url")
+		if !strings.Contains(proxyURL, ".tiktok.com/") && !strings.Contains(proxyURL, "media_type=video_") {
+			http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
+			return
+		}
+
+		req, err := http.NewRequest("GET", proxyURL, nil)
+		if err != nil {
+			log.Printf("Error: new request: %s", err)
+			return
+		}
+
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			log.Printf("Error: proxy %q: %s", req.URL, err)
+			return
+		}
+		defer resp.Body.Close()
+
+		io.Copy(w, resp.Body)
+	})
+
 	router.HandleFunc("/", HandleTumblr)
 	router.HandleFunc("/{feeds}", HandleTumblr)
 	router.HandleFunc("/{feeds}/", HandleTumblr)
