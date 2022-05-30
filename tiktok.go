@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -41,10 +42,17 @@ type tiktokAccountData struct {
 		Description string `json:"desc"`
 		CreateTime  string `json:"createTime"`
 		Video       struct {
-			Width    int    `json:"width"`
-			Height   int    `json:"height"`
-			Cover    string `json:"cover"`
-			PlayAddr string `json:"playAddr"`
+			Width         int    `json:"width"`
+			Height        int    `json:"height"`
+			Cover         string `json:"cover"`
+			PlayAddr      string `json:"playAddr"`
+			SubtitleInfos []struct {
+				LanguageID       string `json:"LanguageID"`
+				LanguageCodeName string `json:"LanguageCodeName"`
+				URL              string `json:"Url"`
+				Format           string `json:"Format"`
+				Source           string `json:"Source"`
+			} `json:"subtitleInfos"`
 		} `json:"video"`
 		Author string `json:"author"`
 		Music  struct {
@@ -150,9 +158,21 @@ func (tt *tiktok) Next() (*Post, error) {
 	date := time.Unix(createTime, 0)
 
 	buf := new(bytes.Buffer)
-	fmt.Fprintf(buf, `<video preload="none" controls muted loading="lazy" poster=%q src=%q width="%d" height="%d"></video>`,
+	fmt.Fprintf(buf, `<video preload="none" controls muted loading="lazy" poster=%q src=%q width="%d" height="%d">`,
 		postData.Video.Cover, postData.Video.PlayAddr, postData.Video.Width, postData.Video.Height)
-	fmt.Fprintln(buf)
+	sort.Slice(postData.Video.SubtitleInfos, func(i, j int) bool {
+		return postData.Video.SubtitleInfos[i].LanguageID < postData.Video.SubtitleInfos[j].LanguageID
+	})
+	for _, subtitle := range postData.Video.SubtitleInfos {
+		if subtitle.LanguageCodeName == "eng-US" {
+			fmt.Fprintf(buf, `	<track default kind="captions" srclang="en" label=%q src=%q data-translation-source=%q />`, subtitle.LanguageCodeName, subtitle.URL, subtitle.Source)
+		} else {
+			fmt.Fprintf(buf, `	<track kind="captions" label=%q src=%q data-translation-source=%q />`, subtitle.LanguageCodeName, subtitle.URL, subtitle.Source)
+		}
+		fmt.Fprintln(buf)
+
+	}
+	fmt.Fprintln(buf, `</video>`)
 
 	fmt.Fprintf(buf, `<p>%s</p>`, postData.Description)
 
@@ -163,6 +183,7 @@ func (tt *tiktok) Next() (*Post, error) {
 	}
 
 	fmt.Fprintf(buf, `<p>%d ❤, %d 📮, %d 💬, %d 🎶`, postData.Stats.DiggCount, postData.Stats.ShareCount, postData.Stats.CommentCount, postData.Stats.PlayCount)
+	fmt.Fprintln(buf)
 
 	tags := make([]string, 0, 1)
 	for _, maybeTag := range strings.Fields(postData.Description) {
