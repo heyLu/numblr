@@ -167,7 +167,7 @@ func (tt *tiktok) Next() (*Post, error) {
 	return &Post{
 		Source:          "tiktok",
 		ID:              id,
-		URL:             "https://www.tiktok.com/@" + postData.Author + "/" + id,
+		URL:             "https://www.tiktok.com/@" + postData.Author + "/video/" + id,
 		Title:           "",
 		Author:          postData.Author + "@tiktok",
 		AvatarURL:       tt.accountData.SharingMeta.Value.Image,
