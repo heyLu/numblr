@@ -33,6 +33,11 @@ For the other sources, there is special syntax to specify which source you want:
 
   [`/lil%20nas%20x@youtube`](/lil%20nas%20x@youtube) gives you the content of
   <https://twitter.com/LilNasX>.
+- For TikTok, you use the `@tiktok` suffix.
+
+  [`/lilnasx@tiktok`](/lilnasx@tiktok) gives you the content of
+  <https://www.tiktok.com/@lilnasx>.
+
 - And for good old [RSS](https://en.wikipedia.org/wiki/RSS), you use any name with a dot in it.
 
   [`/staff.tumblr.com`](/staff.tumblr.com) gives you the content of
