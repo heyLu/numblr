@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -112,7 +113,10 @@ func NewTikTok(ctx context.Context, name string, _ Search) (Feed, error) {
 
 	accountDataEl := cascadia.QueryAll(node, accountDataMatcher)
 	if len(accountDataEl) != 1 {
-		return nil, fmt.Errorf("could not find account data")
+		buf := new(bytes.Buffer)
+		_ = html.Render(buf, node)
+		log.Printf("could not find account data in %q", buf.String())
+		return nil, fmt.Errorf("could not find account data, %d matches", len(accountDataEl))
 	}
 
 	var accountData tiktokAccountData
