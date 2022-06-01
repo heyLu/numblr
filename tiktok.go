@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -17,6 +19,8 @@ import (
 )
 
 var accountDataMatcher = cascadia.MustCompile("script#SIGI_STATE")
+var accountRefRE = regexp.MustCompile(`@(([A-Z]\w+ [A-Z])?\w+)`)
+var tagRE = regexp.MustCompile(`#(\w+)`)
 
 type tiktok struct {
 	name string
@@ -193,7 +197,19 @@ func (tt *tiktok) Next() (*Post, error) {
 	}
 	fmt.Fprintln(buf, `</video>`)
 
-	fmt.Fprintf(buf, `<p>%s</p>`, postData.Description)
+	description := postData.Description
+	description = accountRefRE.ReplaceAllStringFunc(description, func(accountRef string) string {
+		accountLink := accountRef[1:]
+		if strings.Contains(accountLink, " ") {
+			accountLink = strings.Replace(strings.ToLower(accountLink), " ", "", -1)
+		}
+		return fmt.Sprintf("<a href=%q>%s</a>", "/"+accountLink+"@tiktok", accountRef)
+	})
+	description = tagRE.ReplaceAllStringFunc(description, func(tag string) string {
+		return fmt.Sprintf(`<a class="tag" href="/?feeds=%s">%s</a>`, url.QueryEscape("https://www.tiktok.com/tag/"+tag[1:]), tag)
+	})
+
+	fmt.Fprintf(buf, `<p>%s</p>`, description)
 
 	if tt.name != postData.Author+"@tiktok" {
 		fmt.Fprintf(buf, "<p>Originally by <a href=%q>%s</a>.</p>", postData.Author+"@tiktok", postData.Author)
