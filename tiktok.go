@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/http/cookiejar"
 	"net/url"
 	"regexp"
 	"sort"
@@ -96,7 +97,10 @@ func NewTikTok(ctx context.Context, name string, _ Search) (Feed, error) {
 	req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64; rv:100.0) Gecko/20100101 Firefox/100.0")
 	req.Header.Set("Referer", "https://www.tiktok.com/")
 
-	resp, err := http.DefaultClient.Do(req)
+	httpClient := &http.Client{}
+	httpClient.Jar, _ = cookiejar.New(nil)
+
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("fetching %q: %w", name, err)
 	}
