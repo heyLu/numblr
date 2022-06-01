@@ -14,11 +14,41 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/andybalholm/cascadia"
 	"golang.org/x/net/html"
 )
+
+var tiktokRequestCountMu sync.Mutex
+var tiktokRequestCount = 0
+
+func init() {
+	go resetTiktokRequestCount()
+}
+
+func resetTiktokRequestCount() {
+	for {
+		time.Sleep(1 * time.Minute)
+		tiktokRequestCountMu.Lock()
+		tiktokRequestCount = 0
+		tiktokRequestCountMu.Unlock()
+	}
+}
+
+func canDoTiktokRequest() error {
+	tiktokRequestCountMu.Lock()
+	requestCount := tiktokRequestCount
+	tiktokRequestCount++
+	tiktokRequestCountMu.Unlock()
+
+	if requestCount > 10 {
+		return fmt.Errorf("too many tiktok requests, slow down a bit (%d)", requestCount)
+	}
+
+	return nil
+}
 
 var accountDataMatcher = cascadia.MustCompile("script#SIGI_STATE")
 var accountRefRE = regexp.MustCompile(`@(([A-Z]\w+ [A-Z])?\w+)`)
@@ -87,6 +117,11 @@ func NewTikTok(ctx context.Context, name string, _ Search) (Feed, error) {
 	nameIdx := strings.Index(name, "@")
 	if !strings.Contains(name, "https://") && nameIdx != -1 {
 		name = "https://www.tiktok.com/@" + name[:nameIdx]
+	}
+
+	err := canDoTiktokRequest()
+	if err != nil {
+		return nil, err
 	}
 
 	req, err := http.NewRequestWithContext(ctx, "GET", name, nil)
