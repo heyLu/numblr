@@ -92,7 +92,7 @@ func NewTikTok(ctx context.Context, name string, _ Search) (Feed, error) {
 		return nil, fmt.Errorf("new request: %w", err)
 	}
 	req.Header.Set("Accept", "*/*")
-	//req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64; rv:100.0) Gecko/20100101 Firefox/100.0")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64; rv:100.0) Gecko/20100101 Firefox/100.0")
 	req.Header.Set("Referer", "https://www.tiktok.com/")
 
 	resp, err := http.DefaultClient.Do(req)
