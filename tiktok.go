@@ -36,6 +36,9 @@ type tiktokAccountData struct {
 		UserPost struct {
 			List []string `json:"list"`
 		} `json:"user-post"`
+		Challenge struct {
+			List []string `json:"list"`
+		} `json:"challenge"`
 	} `json:"ItemList"`
 	ItemModule map[string]struct {
 		ID          string `json:"id"`
@@ -118,11 +121,19 @@ func NewTikTok(ctx context.Context, name string, _ Search) (Feed, error) {
 		name = accountData.UserPage.UniqueID + "@tiktok"
 	}
 
+	postIDs := accountData.ItemList.UserPost.List
+	if len(postIDs) == 0 {
+		postIDs = accountData.ItemList.Challenge.List
+	}
+	if len(postIDs) == 0 {
+		return nil, fmt.Errorf("no posts found, unsupported page?")
+	}
+
 	return &tiktok{
 		name: name,
 
 		accountData: accountData,
-		postIDs:     accountData.ItemList.UserPost.List,
+		postIDs:     postIDs,
 	}, nil
 }
 
@@ -183,6 +194,11 @@ func (tt *tiktok) Next() (*Post, error) {
 	fmt.Fprintln(buf, `</video>`)
 
 	fmt.Fprintf(buf, `<p>%s</p>`, postData.Description)
+
+	if tt.name != postData.Author+"@tiktok" {
+		fmt.Fprintf(buf, "<p>Originally by <a href=%q>%s</a>.</p>", postData.Author+"@tiktok", postData.Author)
+		fmt.Fprintln(buf)
+	}
 
 	if postData.Music.PlayURL != "" {
 		fmt.Fprintf(buf, `<p>Music: %s from %s by %s: `, postData.Music.Title, postData.Music.Album, postData.Music.AuthorName)
