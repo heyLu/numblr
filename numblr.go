@@ -1663,8 +1663,9 @@ func HandlePost(w http.ResponseWriter, req *http.Request) {
 	f(node)
 
 	fmt.Fprintf(w, `<hr />
-<a href=%q>View on Tumblr</a>
-`, tumblrURL)
+<p><a href=%q>View on Tumblr</a></p>
+<p><a href=%q>View on archive.org</a></p>
+`, tumblrURL, fmt.Sprintf("https://web.archive.org/web/%s/%s", time.Now().Format("20060102"), tumblrURL))
 }
 
 func fetchPhotoset(ctx context.Context, tumblr string, photosetPath string) ([]*html.Node, error) {
