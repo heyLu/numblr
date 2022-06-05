@@ -145,7 +145,7 @@ func NewTikTok(ctx context.Context, name string, _ search.Search) (feed.Feed, er
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("unexpected status code: %d (%s)", resp.StatusCode, http.StatusText(resp.StatusCode))
+		return nil, feed.StatusError{Code: resp.StatusCode}
 	}
 
 	node, err := html.Parse(resp.Body)

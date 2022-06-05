@@ -469,7 +469,7 @@ func HandleAvatar(w http.ResponseWriter, req *http.Request) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
-		http.Error(w, fmt.Sprintf("Error: fetching avatar: unexpected status code %d", resp.StatusCode), http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf("Error: fetching avatar: %s", feed.StatusError{Code: resp.StatusCode}), http.StatusInternalServerError)
 		return
 	}
 

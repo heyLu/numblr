@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"regexp"
 	"strings"
 	"sync"
@@ -144,4 +145,15 @@ func (m *merger) Close() error {
 		err = t.Close()
 	}
 	return err
+}
+
+var _ error = StatusError{}
+
+// StatusError is an error with an HTTP status code.
+type StatusError struct {
+	Code int
+}
+
+func (se StatusError) Error() string {
+	return fmt.Sprintf("unexpected status code: %d (%s)", se.Code, http.StatusText(se.Code))
 }

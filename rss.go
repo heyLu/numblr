@@ -58,6 +58,10 @@ func NewRSS(ctx context.Context, name string, _ search.Search) (feed.Feed, error
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode != 200 {
+		return nil, feed.StatusError{Code: resp.StatusCode}
+	}
+
 	buf := new(bytes.Buffer)
 	_, err = io.Copy(buf, resp.Body)
 	if err != nil {

@@ -34,7 +34,7 @@ func NewTumblrRSS(ctx context.Context, name string, _ search.Search) (feed.Feed,
 	}
 	if resp.StatusCode != 200 {
 		resp.Body.Close()
-		return nil, fmt.Errorf("download: wrong response code: %d", resp.StatusCode)
+		return nil, fmt.Errorf("download: %w", feed.StatusError{Code: resp.StatusCode})
 	}
 
 	if strings.HasPrefix(resp.Request.URL.Host, "www.tumblr.com") {

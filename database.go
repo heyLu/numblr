@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net/http"
 	"strings"
 	"time"
 
@@ -181,7 +182,8 @@ func NewDatabaseCached(ctx context.Context, db *sql.DB, name string, uncachedFn 
 			log.Printf("Error: %s", updateErr)
 		}
 
-		if strings.HasSuffix(err.Error(), "wrong response code: 404") {
+		var statusErr feed.StatusError
+		if ok := errors.As(err, &statusErr); ok && statusErr.Code == http.StatusNotFound {
 			var rows *sql.Rows
 			var err error
 			if search.BeforeID != "" {

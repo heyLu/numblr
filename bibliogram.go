@@ -57,7 +57,7 @@ func NewBibliogram(ctx context.Context, name string, _ search.Search) (feed.Feed
 			continue
 		}
 		if resp.StatusCode != 200 {
-			err = fmt.Errorf("download %q: wrong response code: %d", rssURL, resp.StatusCode)
+			err = fmt.Errorf("download %q: %w", rssURL, feed.StatusError{Code: resp.StatusCode})
 			if resp.StatusCode == 403 { // instance likely blocked at the moment
 				continue
 			}
@@ -132,7 +132,7 @@ func initBibliogram(ctx context.Context) ([]string, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("unexpected status code: %d (%s)", resp.StatusCode, http.StatusText(resp.StatusCode))
+		return nil, feed.StatusError{Code: resp.StatusCode}
 	}
 
 	var instanceInfo struct {
