@@ -3,9 +3,8 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"encoding/xml"
+	"errors"
 	"fmt"
-	"io"
 	"math/rand"
 	"net/http"
 	"net/url"
@@ -16,6 +15,7 @@ import (
 	"github.com/heyLu/numblr/search"
 )
 
+// BibliogramInstancesURL is the url used to discover available Bibliogram instances.
 var BibliogramInstancesURL = "https://bibliogram.art/api/instances"
 
 var bibliogramInstances []string
@@ -28,7 +28,7 @@ func init() {
 // NewBibliogram creates a new feed for Instagram, via Bibliogram.
 //
 // See https://git.sr.ht/~cadence/bibliogram.
-func NewBibliogram(ctx context.Context, name string, _ search.Search) (feed.Feed, error) {
+func NewBibliogram(ctx context.Context, name string, search search.Search) (feed.Feed, error) {
 	if !bibliogramInitialized {
 		var err error
 		bibliogramInstances, err = initBibliogram(ctx)
@@ -39,30 +39,27 @@ func NewBibliogram(ctx context.Context, name string, _ search.Search) (feed.Feed
 	}
 
 	nameIdx := strings.Index(name, "@")
-	rssURL := bibliogramInstances[rand.Intn(len(bibliogramInstances))] + fmt.Sprintf("/u/%s/rss.xml", url.PathEscape(name[:nameIdx]))
+	var rssURL string
 
-	var resp *http.Response
+	var rssFeed feed.Feed
 	var err error
 
 	for attempts := 0; attempts < len(bibliogramInstances); attempts++ {
 		rssURL = bibliogramInstances[rand.Intn(len(bibliogramInstances))] + fmt.Sprintf("/u/%s/rss.xml", url.PathEscape(name[:nameIdx]))
-		var req *http.Request
-		req, err = http.NewRequestWithContext(ctx, "GET", rssURL, nil)
+
+		rssFeed, err = NewRSS(ctx, rssURL, search)
 		if err != nil {
-			return nil, fmt.Errorf("new request: %w", err)
-		}
-		resp, err = http.DefaultClient.Do(req)
-		if err != nil {
-			err = fmt.Errorf("download %q: %w", name, err)
-			continue
-		}
-		if resp.StatusCode != 200 {
-			err = fmt.Errorf("download %q: %w", rssURL, feed.StatusError{Code: resp.StatusCode})
-			if resp.StatusCode == 403 { // instance likely blocked at the moment
+			var statusErr feed.StatusError
+			if ok := errors.As(err, &statusErr); ok {
+				if statusErr.Code == http.StatusForbidden {
+					continue
+				}
+				if statusErr.Code < http.StatusInternalServerError {
+					break
+				}
+			} else {
+				err = fmt.Errorf("download %q: %w", name, err)
 				continue
-			}
-			if resp.StatusCode < 500 {
-				break
 			}
 		}
 
@@ -74,25 +71,18 @@ func NewBibliogram(ctx context.Context, name string, _ search.Search) (feed.Feed
 		return nil, err
 	}
 
-	dec := xml.NewDecoder(resp.Body)
-	token, err := dec.Token()
-	for err == nil {
-		el, ok := token.(xml.EndElement)
-		if ok && el.Name.Space == "http://www.w3.org/2005/Atom" && el.Name.Local == "link" {
-			break
-		}
-		token, err = dec.Token()
-	}
-	if err != nil && err != io.EOF {
-		return nil, fmt.Errorf("skip token: %w", err)
-	}
-
-	return &bibliogramRSS{url: rssURL, tumblrRSS: tumblrRSS{name: name, r: resp.Body, dec: dec, dateFormat: NitterDate}}, nil
+	return &bibliogramRSS{name: name[:nameIdx] + "@instagram", url: rssURL, Feed: rssFeed}, nil
 }
 
 type bibliogramRSS struct {
-	url string
-	tumblrRSS
+	name string
+	url  string
+
+	feed.Feed
+}
+
+func (br bibliogramRSS) Name() string {
+	return br.name
 }
 
 func (br bibliogramRSS) URL() string {
@@ -100,12 +90,14 @@ func (br bibliogramRSS) URL() string {
 }
 
 func (br bibliogramRSS) Next() (*feed.Post, error) {
-	post, err := br.tumblrRSS.Next()
+	post, err := br.Feed.Next()
 	if err != nil {
 		return nil, err
 	}
 
 	post.Source = "instagram"
+
+	post.Author = br.name
 
 	post.Title = ""
 
