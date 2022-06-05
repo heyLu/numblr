@@ -11,6 +11,9 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/heyLu/numblr/feed"
+	"github.com/heyLu/numblr/search"
 )
 
 var BibliogramInstancesURL = "https://bibliogram.art/api/instances"
@@ -25,7 +28,7 @@ func init() {
 // NewBibliogram creates a new feed for Instagram, via Bibliogram.
 //
 // See https://git.sr.ht/~cadence/bibliogram.
-func NewBibliogram(ctx context.Context, name string, _ Search) (Feed, error) {
+func NewBibliogram(ctx context.Context, name string, _ search.Search) (feed.Feed, error) {
 	if !bibliogramInitialized {
 		var err error
 		bibliogramInstances, err = initBibliogram(ctx)
@@ -96,7 +99,7 @@ func (br bibliogramRSS) URL() string {
 	return br.url
 }
 
-func (br bibliogramRSS) Next() (*Post, error) {
+func (br bibliogramRSS) Next() (*feed.Post, error) {
 	post, err := br.tumblrRSS.Next()
 	if err != nil {
 		return nil, err

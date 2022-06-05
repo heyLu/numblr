@@ -12,6 +12,9 @@ import (
 
 	"github.com/andybalholm/cascadia"
 	"golang.org/x/net/html"
+
+	"github.com/heyLu/numblr/feed"
+	"github.com/heyLu/numblr/search"
 )
 
 var workMatcher = cascadia.MustCompile("li.work")
@@ -29,7 +32,7 @@ type ao3 struct {
 	works []*html.Node
 }
 
-func NewAO3(ctx context.Context, name string, _ Search) (Feed, error) {
+func NewAO3(ctx context.Context, name string, _ search.Search) (feed.Feed, error) {
 	// TODO: implement ao3 search
 	nameIdx := strings.Index(name, "@")
 	if nameIdx != -1 {
@@ -92,7 +95,7 @@ func (ao3 *ao3) URL() string {
 	return ao3.name
 }
 
-func (ao3 *ao3) Next() (*Post, error) {
+func (ao3 *ao3) Next() (*feed.Post, error) {
 	if len(ao3.works) == 0 {
 		return nil, io.EOF
 	}
@@ -199,7 +202,7 @@ func (ao3 *ao3) Next() (*Post, error) {
 	}
 
 	ao3.works = ao3.works[1:]
-	return &Post{
+	return &feed.Post{
 		Source:          "ao3",
 		ID:              id,
 		URL:             postURL,

@@ -1,8 +1,6 @@
 package main
 
 import (
-	"strconv"
-	"time"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -10,7 +8,12 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
+	"time"
+
+	"github.com/heyLu/numblr/feed"
+	"github.com/heyLu/numblr/search"
 )
 
 // maxResultSize is the maximum amount of bytes to read from a YouTube
@@ -20,7 +23,7 @@ const maxResultSize = 300 * 1000 * 1000
 var searchResultStart = []byte(`{"primaryContents":{"sectionListRenderer":{"contents":[{"itemSectionRenderer":{"contents":`)
 
 // NewYoutube creates a new feed for YouTube.
-func NewYoutube(ctx context.Context, name string, search Search) (Feed, error) {
+func NewYoutube(ctx context.Context, name string, search search.Search) (feed.Feed, error) {
 	nameIdx := strings.Index(name, "@")
 
 	name = name[:nameIdx]
@@ -88,7 +91,7 @@ func NewYoutube(ctx context.Context, name string, search Search) (Feed, error) {
 		avatarURL = baseURL.ResolveReference(thumbnailURL).String()
 	}
 
-	req, err = http.NewRequestWithContext(ctx, "GET", "https://youtube.com/channel/" + url.QueryEscape(channelID) + "/community", nil)
+	req, err = http.NewRequestWithContext(ctx, "GET", "https://youtube.com/channel/"+url.QueryEscape(channelID)+"/community", nil)
 	if err != nil {
 		return nil, fmt.Errorf("new request: %w", err)
 	}
@@ -118,7 +121,7 @@ type youtubeRSS struct {
 	url       string
 	avatarURL string
 
-	communityPosts []*Post
+	communityPosts []*feed.Post
 
 	*rss
 }
@@ -132,7 +135,7 @@ func (yt *youtubeRSS) URL() string {
 	return yt.url
 }
 
-func (yt *youtubeRSS) Next() (*Post, error) {
+func (yt *youtubeRSS) Next() (*feed.Post, error) {
 	// TODO: sort community posts correctly (simply merge feeds?)
 	if len(yt.communityPosts) > 0 {
 		post := yt.communityPosts[0]
@@ -232,7 +235,7 @@ type youtubeChannel struct {
 	} `json:"channelRenderer"`
 }
 
-func parseCommunityPosts(r io.Reader) ([]*Post, error) {
+func parseCommunityPosts(r io.Reader) ([]*feed.Post, error) {
 	buf := new(bytes.Buffer)
 	_, err := io.Copy(buf, &io.LimitedReader{R: r, N: maxResultSize})
 	if err != nil {
@@ -258,7 +261,7 @@ func parseCommunityPosts(r io.Reader) ([]*Post, error) {
 		return nil, fmt.Errorf("parsing search results: %w", err)
 	}
 
-	posts := make([]*Post, 0, len(results))
+	posts := make([]*feed.Post, 0, len(results))
 	for _, result := range results {
 		data := result.BackstagePostThreadRenderer.Post.BackstagePostRenderer
 		if data.PostID == "" {
@@ -275,12 +278,12 @@ func parseCommunityPosts(r io.Reader) ([]*Post, error) {
 			description += run.Text
 		}
 
-		post := &Post{
-			ID: data.PostID,
+		post := &feed.Post{
+			ID:              data.PostID,
 			DescriptionHTML: description,
-			URL: "https://youtube.com/post/" + url.QueryEscape(data.PostID),
-			Date: *date,
-			DateString: data.PublishedTimeText.Runs[0].Text,
+			URL:             "https://youtube.com/post/" + url.QueryEscape(data.PostID),
+			Date:            *date,
+			DateString:      data.PublishedTimeText.Runs[0].Text,
 		}
 
 		posts = append(posts, post)
@@ -341,14 +344,14 @@ type youtubeCommunityPost struct {
 	BackstagePostThreadRenderer struct {
 		Post struct {
 			BackstagePostRenderer struct {
-				PostID string `json:"postId"`
+				PostID      string `json:"postId"`
 				ContentText struct {
 					Runs []struct {
 						Text string `json:"text"`
 					} `json:"runs"`
 				} `json:"contentText"`
 				PublishedTimeText struct {
-					Runs []struct{
+					Runs []struct {
 						Text string `json:"text"`
 					} `json:"runs"`
 				} `json:"publishedTimeText"`
@@ -379,13 +382,13 @@ func parseYoutubeTimeText(s string) (*time.Time, error) {
 	case "hour", "hours":
 		t = t.Add(-time.Duration(num) * time.Hour).Truncate(time.Minute)
 	case "day", "days":
-		t = t.AddDate(0, 0, -int(num)).Truncate(24*time.Hour)
+		t = t.AddDate(0, 0, -int(num)).Truncate(24 * time.Hour)
 	case "week", "weeks":
-		t = t.AddDate(0, 0, -int(num)*7).Truncate(24*time.Hour)
+		t = t.AddDate(0, 0, -int(num)*7).Truncate(24 * time.Hour)
 	case "month", "months":
-		t = t.AddDate(0, -int(num), 0).Truncate(24*time.Hour)
+		t = t.AddDate(0, -int(num), 0).Truncate(24 * time.Hour)
 	case "year", "years":
-		t = t.AddDate(-int(num), 0, 0).Truncate(24*time.Hour)
+		t = t.AddDate(-int(num), 0, 0).Truncate(24 * time.Hour)
 	default:
 		return nil, fmt.Errorf("unexpected time format %q (can't parse %q)", s, parts[1])
 	}

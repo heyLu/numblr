@@ -11,12 +11,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/heyLu/numblr/feed"
+	"github.com/heyLu/numblr/search"
 	"golang.org/x/net/html"
 )
 
 const TumblrDate = "Mon, 2 Jan 2006 15:04:05 -0700"
 
-func NewTumblrRSS(ctx context.Context, name string, _ Search) (Feed, error) {
+func NewTumblrRSS(ctx context.Context, name string, _ search.Search) (feed.Feed, error) {
 	nameIdx := strings.Index(name, "@")
 	if nameIdx != -1 {
 		name = name[:nameIdx]
@@ -111,8 +113,8 @@ func (tr *tumblrRSS) URL() string {
 var tumblrPostURLRE = regexp.MustCompile(`https?://([-\w]+).tumblr.com/post/(\d+)(/(.*))?`)
 var tumblrQuestionRE = regexp.MustCompile(`\s*<p>`)
 
-func (tr *tumblrRSS) Next() (*Post, error) {
-	var post Post
+func (tr *tumblrRSS) Next() (*feed.Post, error) {
+	var post feed.Post
 	err := tr.dec.Decode(&post)
 	if err != nil {
 		return nil, fmt.Errorf("decode: %w", err)

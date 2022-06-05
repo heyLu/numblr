@@ -24,28 +24,11 @@ import (
 	"github.com/NYTimes/gziphandler"
 	"github.com/gorilla/mux"
 	lru "github.com/hashicorp/golang-lru"
+	"github.com/heyLu/numblr/feed"
+	"github.com/heyLu/numblr/search"
 	"github.com/yuin/goldmark"
 	"golang.org/x/net/html"
 )
-
-type Post struct {
-	Source          string
-	ID              string `xml:"guid"`
-	Author          string
-	AvatarURL       string
-	URL             string   `xml:"link"`
-	Title           string   `xml:"title"`
-	DescriptionHTML string   `xml:"description"`
-	Tags            []string `xml:"category"`
-	DateString      string   `xml:"pubDate"`
-	Date            time.Time
-}
-
-var isReblogRE = regexp.MustCompile(`^\s*[-\w]+:`)
-
-func (p Post) IsReblog() bool {
-	return isReblogRE.MatchString(p.Title) || strings.Contains(p.DescriptionHTML, `class="tumblr_blog"`)
-}
 
 var contentNoteRE = regexp.MustCompile(`\b(tw|trigger warning|cn|content note|cw|content warning)\b`)
 var imgRE = regexp.MustCompile(`<img `)
@@ -143,7 +126,7 @@ func main() {
 		log.Fatalf("setup database: %s", err)
 	}
 
-	cacheFn = func(ctx context.Context, name string, uncachedFn FeedFn, search Search) (Feed, error) {
+	cacheFn = func(ctx context.Context, name string, uncachedFn FeedFn, search search.Search) (feed.Feed, error) {
 		return NewDatabaseCached(ctx, db, name, uncachedFn, search)
 	}
 
@@ -167,7 +150,7 @@ func main() {
 					ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 					defer cancel()
 
-					feed, err := NewCachedFeed(ctx, feedName, cacheFn, Search{ForceFresh: true})
+					feed, err := NewCachedFeed(ctx, feedName, cacheFn, search.Search{ForceFresh: true})
 					if err != nil {
 						return fmt.Errorf("background refresh: opening %s: %s", feedName, err)
 					}
@@ -515,7 +498,7 @@ func strictTransportSecurity(next http.Handler) http.Handler {
 type FeedInfo struct {
 	Duration time.Duration
 	Error    error
-	Feed     Feed
+	Feed     feed.Feed
 }
 
 func HandleTumblr(w http.ResponseWriter, req *http.Request) {
@@ -544,18 +527,18 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 	}
 
 	settings := SettingsFromRequest(req)
-	search := parseSearch(req)
+	search := search.FromRequest(req)
 
 	if tag != "" {
 		search.IsActive = true
 		search.Tags = append(search.Tags, strings.ToLower(tag))
 	}
 
-	var feed Feed
+	var mergedFeeds feed.Feed
 	var err error
 	var feedInfoMu sync.Mutex
 	feedInfo := make(map[string]FeedInfo, len(settings.SelectedFeeds))
-	feeds := make([]Feed, len(settings.SelectedFeeds))
+	feeds := make([]feed.Feed, len(settings.SelectedFeeds))
 	var wg sync.WaitGroup
 	wg.Add(len(settings.SelectedFeeds))
 	for i := range settings.SelectedFeeds {
@@ -625,14 +608,14 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 	}
 
 	wg.Wait()
-	successfulFeeds := make([]Feed, 0, len(feeds))
+	successfulFeeds := make([]feed.Feed, 0, len(feeds))
 	for _, feed := range feeds {
 		if feed == nil {
 			continue
 		}
 		successfulFeeds = append(successfulFeeds, feed)
 	}
-	feed = MergeFeeds(successfulFeeds...)
+	mergedFeeds = feed.Merge(successfulFeeds...)
 	if err != nil {
 		go CollectError(err)
 		log.Println("open:", err)
@@ -646,12 +629,12 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 			err = fmt.Errorf("%w (and %d more)", err, numErrors-1)
 		}
 		fmt.Fprintf(w, `<code style="color: red; font-weight: bold; font-size: larger;">could not load feed: %s</code>`, err)
-		if feed == nil {
+		if mergedFeeds == nil {
 			return
 		}
 	}
 	defer func() {
-		err := feed.Close()
+		err := mergedFeeds.Close()
 		if err != nil {
 			log.Printf("Error: closing %s: %s", settings.SelectedFeeds, err)
 		}
@@ -672,14 +655,14 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 	fmt.Fprintf(w, `<form method="GET" action=%q><input aria-label="search posts" name="search" type="search" value=%q placeholder="noreblog #art ..." /></form>`, req.URL.Path, req.URL.Query().Get("search"))
 
 	postCount := 0
-	var post *Post
-	var lastPost *Post
+	var post *feed.Post
+	var lastPost *feed.Post
 	var nextPost func()
 	nextPost = func() {
 		lastPost = post
 
 		start := time.Now()
-		post, err = feed.Next()
+		post, err = mergedFeeds.Next()
 		dur := time.Since(start)
 
 		if dur > 200*time.Millisecond {
@@ -717,7 +700,7 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	posts := make([]*Post, 0, limit)
+	posts := make([]*feed.Post, 0, limit)
 
 	nextPost()
 	for err == nil {
@@ -737,7 +720,7 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 		nextPost()
 	}
 
-	postGroups := make([][]*Post, 0, limit)
+	postGroups := make([][]*feed.Post, 0, limit)
 
 	group, rest := nextPostsGroup(posts, GroupPostsNumber)
 	for len(rest) != 0 {
@@ -1020,7 +1003,7 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 	fmt.Fprintln(w, `</ul>
 </section>`)
 
-	fmt.Fprintf(w, `<hr /><footer>%d posts from %q (<a href=%q>source</a>) in %s (open: %s)</footer>`, postCount, feed.Name(), feed.URL(), time.Since(start).Round(time.Millisecond), openTime.Round(time.Millisecond))
+	fmt.Fprintf(w, `<hr /><footer>%d posts from %q (<a href=%q>source</a>) in %s (open: %s)</footer>`, postCount, mergedFeeds.Name(), mergedFeeds.URL(), time.Since(start).Round(time.Millisecond), openTime.Round(time.Millisecond))
 
 	feedsByTime := make([]string, 0, len(feedInfo))
 	for feed := range feedInfo {
@@ -1028,19 +1011,19 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 	}
 	sort.Sort(sort.Reverse(sortByFunc{strings: feedsByTime, lessFn: func(a, b string) bool { return feedInfo[a].Duration < feedInfo[b].Duration }}))
 	fmt.Fprintln(w, `<details><summary>Performance details</summary><ol>`)
-	for _, feed := range feedsByTime {
+	for _, feedName := range feedsByTime {
 		errorInfo := ""
-		if feedInfo[feed].Error != nil {
-			errorInfo = fmt.Sprintf(" (<code style=\"font-size: smaller\">%s</code>)", feedInfo[feed].Error)
+		if feedInfo[feedName].Error != nil {
+			errorInfo = fmt.Sprintf(" (<code style=\"font-size: smaller\">%s</code>)", feedInfo[feedName].Error)
 		}
 		notes := ""
-		if feedWithNotes, ok := feedInfo[feed].Feed.(Notes); ok {
+		if feedWithNotes, ok := feedInfo[feedName].Feed.(feed.Notes); ok {
 			notes = feedWithNotes.Notes()
 			if notes != "" {
 				notes = ", " + notes
 			}
 		}
-		fmt.Fprintf(w, `<li>%s (%s%s)%s</li>`, feed, feedInfo[feed].Duration, notes, errorInfo)
+		fmt.Fprintf(w, `<li>%s (%s%s)%s</li>`, feedName, feedInfo[feedName].Duration, notes, errorInfo)
 	}
 	fmt.Fprintln(w, `</ol></details>`)
 
@@ -1144,7 +1127,7 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 </html>`)
 }
 
-func nextPostsGroup(posts []*Post, groupPostsNumber int) (group []*Post, rest []*Post) {
+func nextPostsGroup(posts []*feed.Post, groupPostsNumber int) (group []*feed.Post, rest []*feed.Post) {
 	if len(posts) == 0 || len(posts) == 1 {
 		return posts, nil
 	}
@@ -1160,7 +1143,7 @@ func nextPostsGroup(posts []*Post, groupPostsNumber int) (group []*Post, rest []
 		return posts[:i+1], posts[i+1:]
 	}
 
-	return []*Post{posts[0]}, posts[1:]
+	return []*feed.Post{posts[0]}, posts[1:]
 }
 
 func tumblrToInternal(link string) string {
@@ -1187,203 +1170,6 @@ func tumblrToInternal(link string) string {
 	return u.String()
 }
 
-type Search struct {
-	IsActive bool
-
-	BeforeID string
-
-	NoReblogs    bool
-	Skip         bool
-	Terms        []string
-	Tags         []string
-	ExcludeTerms []string
-	ExcludeTags  []string
-
-	ForceFresh bool
-
-	termsRE         *regexp.Regexp
-	excludedTermsRE *regexp.Regexp
-}
-
-func (s *Search) String() string {
-	if !s.IsActive {
-		return ""
-	}
-
-	buf := new(bytes.Buffer)
-	if s.NoReblogs {
-		fmt.Fprint(buf, " noreblogs")
-	}
-	for _, term := range s.Terms {
-		fmt.Fprint(buf, " "+term)
-	}
-	for _, term := range s.ExcludeTerms {
-		fmt.Fprint(buf, " -"+term)
-	}
-	for _, tag := range s.Tags {
-		fmt.Fprint(buf, " #"+tag)
-	}
-	for _, tag := range s.ExcludeTags {
-		fmt.Fprint(buf, " -#"+tag)
-	}
-
-	return buf.String()
-}
-
-func (s *Search) Matches(p *Post) bool {
-	if !s.IsActive {
-		return true
-	}
-
-	if s.NoReblogs && p.IsReblog() {
-		return false
-	}
-
-	for _, tag := range p.Tags {
-		for _, exclude := range s.ExcludeTags {
-			if tag == exclude {
-				return false
-			}
-		}
-	}
-
-	// must match all tags
-	for _, tag := range s.Tags {
-		if !contains(p.Tags, tag) {
-			return false
-		}
-	}
-
-	if s.termsRE != nil {
-		if !s.termsRE.MatchString(p.Title) && !s.termsRE.MatchString(p.DescriptionHTML) {
-			return false
-		}
-	} else {
-		for _, term := range s.Terms {
-			if !strings.Contains(strings.ToLower(p.Title), term) && !strings.Contains(strings.ToLower(p.DescriptionHTML), term) {
-				return false
-			}
-		}
-	}
-
-	if s.excludedTermsRE != nil {
-		if s.excludedTermsRE.MatchString(p.Title) || s.excludedTermsRE.MatchString(p.DescriptionHTML) {
-			return false
-		}
-
-	} else {
-		for _, term := range s.ExcludeTerms {
-			if strings.Contains(strings.ToLower(p.Title), term) || strings.Contains(strings.ToLower(p.DescriptionHTML), term) {
-				return false
-			}
-		}
-	}
-
-	return true
-}
-
-func contains(xs []string, contain string) bool {
-	for _, x := range xs {
-		if strings.ToLower(x) == contain {
-			return true
-		}
-	}
-	return false
-}
-
-func parseSearch(req *http.Request) Search {
-	beforeParam := req.URL.Query().Get("before")
-	forceFresh := req.URL.Query().Get("fresh") != ""
-
-	rawSearch := req.URL.Query().Get("search")
-	if beforeParam == "" && rawSearch == "" {
-		return Search{ForceFresh: forceFresh}
-	}
-
-	search := parseSearchTerms(rawSearch)
-	search.BeforeID = beforeParam
-	search.ForceFresh = forceFresh
-
-	return search
-}
-
-func parseSearchTerms(rawSearch string) Search {
-	searchTerms := strings.Fields(rawSearch)
-
-	search := Search{
-		IsActive:     true,
-		Terms:        make([]string, 0, 1),
-		Tags:         make([]string, 0, 1),
-		ExcludeTags:  make([]string, 0, 1),
-		ExcludeTerms: make([]string, 0, 1),
-	}
-
-	// TODO: allow tags with spaces (#This is fun #Other tag)
-	for _, searchTerm := range searchTerms {
-		if searchTerm == "noreblog" || searchTerm == "noreblogs" {
-			search.NoReblogs = true
-			continue
-		}
-		if searchTerm == "skip" {
-			search.Skip = true
-			continue
-		}
-
-		exclude := false
-		if searchTerm[0] == '-' {
-			exclude = true
-			searchTerm = searchTerm[1:]
-		}
-
-		tag := false
-		if len(searchTerm) > 0 && searchTerm[0] == '#' {
-			tag = true
-			searchTerm = searchTerm[1:]
-		}
-
-		if searchTerm == "" {
-			continue
-		}
-
-		unescaped, err := url.QueryUnescape(searchTerm)
-		if err == nil {
-			searchTerm = unescaped
-		}
-
-		searchTerm = strings.ToLower(searchTerm)
-
-		switch {
-		case exclude && tag:
-			search.ExcludeTags = append(search.ExcludeTags, searchTerm)
-		case tag:
-			search.Tags = append(search.Tags, searchTerm)
-		case exclude:
-			search.ExcludeTerms = append(search.ExcludeTerms, searchTerm)
-		default:
-			search.Terms = append(search.Terms, searchTerm)
-		}
-	}
-
-	if len(search.Terms) > 0 {
-		termsRE, err := regexp.Compile(`(?i)\b(` + strings.Join(search.Terms, "|") + `)\b`)
-		if err == nil {
-			search.termsRE = termsRE
-		} else {
-			log.Printf("invalid search terms %q: %s", search.Terms, err)
-		}
-	}
-	if len(search.ExcludeTerms) > 0 {
-		excludedTermsRE, err := regexp.Compile(`(?i)\b(` + strings.Join(search.ExcludeTerms, "|") + `)\b`)
-		if err == nil {
-			search.excludedTermsRE = excludedTermsRE
-		} else {
-			log.Printf("invalid exclude terms %q: %s", search.ExcludeTerms, err)
-		}
-	}
-
-	return search
-}
-
 type Settings struct {
 	// SelectedFeeds are the feeds that are explicitely selected, e.g. on
 	// the index page, by specifying feeds in the url, or by being on a
@@ -1393,10 +1179,10 @@ type Settings struct {
 	// Searches are feed-specific searches that apply additional filters to
 	// specific feeds, e.g. when you want to filter out or filter on things
 	// from those feeds.
-	Searches map[string]Search
+	Searches map[string]search.Search
 
 	// GlobalSearch is a persistent search that applies to all feeds.
-	GlobalSearch Search
+	GlobalSearch search.Search
 }
 
 func SettingsFromRequest(req *http.Request) Settings {
@@ -1404,19 +1190,19 @@ func SettingsFromRequest(req *http.Request) Settings {
 
 	feeds := getFeeds(req)
 	settings.SelectedFeeds = make([]string, 0, len(feeds))
-	settings.Searches = make(map[string]Search)
+	settings.Searches = make(map[string]search.Search)
 
 	for _, feed := range feeds {
 		parts := strings.SplitN(feed, " ", 2)
 		if len(parts) == 2 {
-			search := parseSearchTerms(parts[1])
+			s := search.ParseTerms(parts[1])
 
 			if parts[0] == "*" {
-				settings.GlobalSearch = search
+				settings.GlobalSearch = s
 				continue
 			}
 
-			settings.Searches[parts[0]] = search
+			settings.Searches[parts[0]] = s
 		}
 
 		settings.SelectedFeeds = append(settings.SelectedFeeds, parts[0])
@@ -1794,105 +1580,10 @@ func filterAttributes(node *html.Node, keepAttrs ...string) {
 	node.Attr = attrs
 }
 
-func MergeFeeds(feeds ...Feed) Feed {
-	return &tumblrMerger{feeds: feeds, posts: make([]*Post, len(feeds)), errors: make([]error, len(feeds))}
-}
+type FeedFn func(ctx context.Context, name string, search search.Search) (feed.Feed, error)
+type CacheFn func(ctx context.Context, name string, uncachedFn FeedFn, search search.Search) (feed.Feed, error)
 
-type tumblrMerger struct {
-	feeds  []Feed
-	posts  []*Post
-	errors []error
-}
-
-func (tm *tumblrMerger) Name() string {
-	name := ""
-	first := true
-	for _, t := range tm.feeds {
-		if !first {
-			name += " "
-		}
-		first = false
-		name += t.Name()
-	}
-	return name
-}
-
-func (tm *tumblrMerger) Description() string {
-	return ""
-}
-
-func (tm *tumblrMerger) URL() string {
-	return ""
-}
-
-func (tm *tumblrMerger) Next() (*Post, error) {
-	allErrors := false
-	for _, err := range tm.errors {
-		allErrors = allErrors && err != nil
-	}
-	if allErrors {
-		return nil, tm.errors[0]
-	}
-
-	var wg sync.WaitGroup
-	wg.Add(len(tm.feeds))
-	for i := range tm.feeds {
-		go func(i int) {
-			if tm.posts[i] == nil && !errors.Is(tm.errors[i], io.EOF) {
-				tm.posts[i], tm.errors[i] = tm.feeds[i].Next()
-			}
-			wg.Done()
-		}(i)
-	}
-	wg.Wait()
-
-	postIdx := -1
-	var firstPost *Post
-
-	for i, post := range tm.posts {
-		if post == nil {
-			continue
-		}
-
-		if firstPost == nil || post.Date.After(firstPost.Date) {
-			postIdx = i
-			firstPost = post
-		}
-	}
-
-	if firstPost == nil {
-		return nil, fmt.Errorf("no more posts: %w", io.EOF)
-	}
-
-	tm.posts[postIdx] = nil
-	firstPost.Author = tm.feeds[postIdx].Name()
-	return firstPost, nil
-}
-
-func (tm *tumblrMerger) Close() error {
-	var err error
-	for _, t := range tm.feeds {
-		err = t.Close()
-	}
-	return err
-}
-
-type Feed interface {
-	Name() string
-	Description() string
-	URL() string
-	Next() (*Post, error)
-	Close() error
-}
-
-type Notes interface {
-	Notes() string
-}
-
-type FeedFn func(ctx context.Context, name string, search Search) (Feed, error)
-type CacheFn func(ctx context.Context, name string, uncachedFn FeedFn, search Search) (Feed, error)
-
-func NewCachedFeed(ctx context.Context, name string, cacheFn CacheFn, search Search) (Feed, error) {
+func NewCachedFeed(ctx context.Context, name string, cacheFn CacheFn, search search.Search) (feed.Feed, error) {
 	switch {
 	case strings.HasSuffix(name, "@twitter") || strings.HasSuffix(name, "@t"):
 		return cacheFn(ctx, name, NewNitter, search)

@@ -19,6 +19,9 @@ import (
 
 	"github.com/andybalholm/cascadia"
 	"golang.org/x/net/html"
+
+	"github.com/heyLu/numblr/feed"
+	"github.com/heyLu/numblr/search"
 )
 
 var tiktokRequestCountMu sync.Mutex
@@ -113,7 +116,7 @@ type tiktokAccountData struct {
 }
 
 // NewTikTok fetches the feed for user `name` from TikTok.
-func NewTikTok(ctx context.Context, name string, _ Search) (Feed, error) {
+func NewTikTok(ctx context.Context, name string, _ search.Search) (feed.Feed, error) {
 	nameIdx := strings.Index(name, "@")
 	if !strings.Contains(name, "https://") && nameIdx != -1 {
 		name = "https://www.tiktok.com/@" + name[:nameIdx]
@@ -196,7 +199,7 @@ func (tt *tiktok) URL() string {
 	return tt.name
 }
 
-func (tt *tiktok) Next() (*Post, error) {
+func (tt *tiktok) Next() (*feed.Post, error) {
 	if len(tt.postIDs) == 0 {
 		return nil, io.EOF
 	}
@@ -275,7 +278,7 @@ func (tt *tiktok) Next() (*Post, error) {
 		}
 	}
 
-	return &Post{
+	return &feed.Post{
 		Source:          "tiktok",
 		ID:              id,
 		URL:             "https://www.tiktok.com/@" + postData.Author + "/video/" + id,

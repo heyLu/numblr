@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/andybalholm/cascadia"
+	"github.com/heyLu/numblr/feed"
+	"github.com/heyLu/numblr/search"
 	"github.com/mmcdole/gofeed"
 	"golang.org/x/net/html"
 )
@@ -27,7 +29,7 @@ func init() {
 
 var RelAlternateMatcher = cascadia.MustCompile(`link[rel=alternate]`)
 
-func NewRSS(ctx context.Context, name string, _ Search) (Feed, error) {
+func NewRSS(ctx context.Context, name string, _ search.Search) (feed.Feed, error) {
 	feedURL := name
 	if strings.Contains(name, "@") {
 		parts := strings.SplitN(name, "@", 2)
@@ -147,7 +149,7 @@ func (rss *rss) URL() string {
 	return rss.feed.Link
 }
 
-func (rss *rss) Next() (*Post, error) {
+func (rss *rss) Next() (*feed.Post, error) {
 	if len(rss.feed.Items) == 0 {
 		return nil, io.EOF
 	}
@@ -181,7 +183,7 @@ func (rss *rss) Next() (*Post, error) {
 			content += fmt.Sprintf(`<img src="%s" />`, encl.URL)
 		}
 	}
-	return &Post{
+	return &feed.Post{
 		Source:          "web",
 		ID:              item.GUID,
 		Author:          rss.name,

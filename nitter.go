@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+
+	"github.com/heyLu/numblr/feed"
+	"github.com/heyLu/numblr/search"
 )
 
 const NitterDate = "Mon, 2 Jan 2006 15:04:05 MST"
@@ -14,7 +17,7 @@ var NitterURL = "https://nitter.net"
 // NewNitter creates a new feed for Twitter, via Nitter.
 //
 // See https://github.com/zedeus/nitter.
-func NewNitter(ctx context.Context, name string, search Search) (Feed, error) {
+func NewNitter(ctx context.Context, name string, search search.Search) (feed.Feed, error) {
 	nameIdx := strings.Index(name, "@")
 	rssURL := fmt.Sprintf("%s/%s/rss", NitterURL, name[:nameIdx])
 	if strings.HasPrefix(name[:nameIdx], "#") {
@@ -44,7 +47,7 @@ func (nr *nitterRSS) URL() string {
 	return fmt.Sprintf("%s/%s/rss", NitterURL, nr.name[:nameIdx])
 }
 
-func (nr *nitterRSS) Next() (*Post, error) {
+func (nr *nitterRSS) Next() (*feed.Post, error) {
 	post, err := nr.rss.Next()
 	if err != nil {
 		return nil, err

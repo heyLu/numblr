@@ -12,6 +12,9 @@ import (
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
+
+	"github.com/heyLu/numblr/feed"
+	"github.com/heyLu/numblr/search"
 )
 
 func InitDatabase(dbPath string) (*sql.DB, error) {
@@ -82,7 +85,7 @@ func ListFeedsOlderThan(ctx context.Context, db *sql.DB, olderThan time.Time) ([
 	return feeds, nil
 }
 
-func NewDatabaseCached(ctx context.Context, db *sql.DB, name string, uncachedFn FeedFn, search Search) (Feed, error) {
+func NewDatabaseCached(ctx context.Context, db *sql.DB, name string, uncachedFn FeedFn, search search.Search) (feed.Feed, error) {
 	// FIXME: cache non-canonical names correctly (e.g. oops@tumblr should be looked up as `oops`)
 	row := db.QueryRowContext(ctx, "SELECT cached_at, url, description, error FROM feed_infos WHERE name = ?", name)
 	var cachedAt time.Time
@@ -153,7 +156,7 @@ func NewDatabaseCached(ctx context.Context, db *sql.DB, name string, uncachedFn 
 		defer cancel()
 	}
 
-	feed, err := uncachedFn(timedCtx, name, search)
+	uncachedFeed, err := uncachedFn(timedCtx, name, search)
 	if err != nil {
 		if !search.ForceFresh && isCached && (errors.Is(timedCtx.Err(), context.DeadlineExceeded) || isTimeoutError(err)) {
 			log.Printf("returning out-of-date feed %q, caused by %v / %v", name, timedCtx.Err(), err)
@@ -198,9 +201,9 @@ func NewDatabaseCached(ctx context.Context, db *sql.DB, name string, uncachedFn 
 
 	return &databaseCaching{
 		db:       db,
-		uncached: feed,
+		uncached: uncachedFeed,
 		cachedAt: time.Now(),
-		posts:    make([]*Post, 0, 10),
+		posts:    make([]*feed.Post, 0, 10),
 	}, nil
 }
 
@@ -224,9 +227,9 @@ type timeoutError interface {
 
 type databaseCaching struct {
 	db       *sql.DB
-	uncached Feed
+	uncached feed.Feed
 	cachedAt time.Time
-	posts    []*Post
+	posts    []*feed.Post
 }
 
 func (ct *databaseCaching) Name() string {
@@ -241,7 +244,7 @@ func (ct *databaseCaching) URL() string {
 	return ct.uncached.URL()
 }
 
-func (ct *databaseCaching) Next() (*Post, error) {
+func (ct *databaseCaching) Next() (*feed.Post, error) {
 	post, err := ct.uncached.Next()
 	if err != nil {
 		return nil, err
@@ -335,7 +338,7 @@ type databaseCached struct {
 	outOfDate   bool
 	notes       []string
 	rows        *sql.Rows
-	lastPost    *Post
+	lastPost    *feed.Post
 }
 
 func (dc *databaseCached) Name() string {
@@ -357,7 +360,7 @@ func (dc *databaseCached) Notes() string {
 	return strings.Join(dc.notes, ",")
 }
 
-func (dc *databaseCached) Next() (*Post, error) {
+func (dc *databaseCached) Next() (*feed.Post, error) {
 	if !dc.rows.Next() {
 		if dc.rows.Err() != nil {
 			return nil, fmt.Errorf("next: %w", dc.rows.Err())
@@ -366,7 +369,7 @@ func (dc *databaseCached) Next() (*Post, error) {
 		return nil, io.EOF
 	}
 
-	var post Post
+	var post feed.Post
 	var tags []byte
 	err := dc.rows.Scan(&post.Source, &post.ID, &post.Author, &post.AvatarURL, &post.URL, &post.Title, &post.DescriptionHTML, &tags, &post.DateString, &post.Date)
 	if err != nil {
