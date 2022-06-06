@@ -135,10 +135,10 @@ func FromRequest(req *http.Request) Search {
 	return search
 }
 
+const quoteChars = `"'`
+
 // ParseTerms parses the search terms from the given string.
 func ParseTerms(rawSearch string) Search {
-	searchTerms := strings.Fields(rawSearch)
-
 	search := Search{
 		IsActive:     true,
 		Terms:        make([]string, 0, 1),
@@ -147,30 +147,64 @@ func ParseTerms(rawSearch string) Search {
 		ExcludeTerms: make([]string, 0, 1),
 	}
 
-	// TODO: allow tags with spaces (#This is fun #Other tag)
-	for _, searchTerm := range searchTerms {
+	for len(rawSearch) > 0 {
+		exclude := false
+		if len(rawSearch) > 0 && rawSearch[0] == '-' {
+			exclude = true
+			rawSearch = rawSearch[1:]
+		}
+
+		tag := false
+		if len(rawSearch) > 0 && rawSearch[0] == '#' {
+			tag = true
+			rawSearch = rawSearch[1:]
+		}
+
+		var searchTerm string
+
+		spaceIdx := strings.IndexAny(rawSearch, ` `)
+		quoteIdx := strings.IndexAny(rawSearch, quoteChars)
+
+		if quoteIdx == -1 {
+			if spaceIdx == -1 {
+				searchTerm = rawSearch
+				rawSearch = ""
+			} else {
+				searchTerm = rawSearch[:spaceIdx]
+				rawSearch = rawSearch[spaceIdx+1:]
+			}
+		} else {
+			if spaceIdx != -1 && spaceIdx < quoteIdx { // space before quote
+				searchTerm = rawSearch[:spaceIdx]
+				rawSearch = rawSearch[spaceIdx+1:]
+			} else {
+				nextQuoteIdx := strings.IndexByte(rawSearch[quoteIdx+1:], rawSearch[quoteIdx]) // matching quote
+				if nextQuoteIdx == -1 {                                                        // unmatched quote
+					if spaceIdx == -1 {
+						searchTerm = rawSearch
+						rawSearch = ""
+					} else {
+						searchTerm = rawSearch[:spaceIdx]
+						rawSearch = rawSearch[spaceIdx+1:]
+					}
+				} else {
+					searchTerm = rawSearch[quoteIdx+1 : nextQuoteIdx+1]
+					rawSearch = rawSearch[nextQuoteIdx+2:]
+					fmt.Printf("%q %q\n", searchTerm, rawSearch)
+				}
+			}
+		}
+
+		if len(searchTerm) == 0 {
+			continue
+		}
+
 		if searchTerm == "noreblog" || searchTerm == "noreblogs" {
 			search.NoReblogs = true
 			continue
 		}
 		if searchTerm == "skip" {
 			search.Skip = true
-			continue
-		}
-
-		exclude := false
-		if searchTerm[0] == '-' {
-			exclude = true
-			searchTerm = searchTerm[1:]
-		}
-
-		tag := false
-		if len(searchTerm) > 0 && searchTerm[0] == '#' {
-			tag = true
-			searchTerm = searchTerm[1:]
-		}
-
-		if searchTerm == "" {
 			continue
 		}
 

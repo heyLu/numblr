@@ -63,8 +63,10 @@ Generally the syntax is like this:
     my-feed -wordidontwanttosee
     my-feed -#tagidontwanttosee
 
-Unfortunately this only works for single words so far, so filtering multi-word
-phrases or tags does not work yet.
+Phrases (containing spaces) can be filtered like this:
+
+    my-feed -"i don't want to see this phrase"
+    my-feed -#"i don't want this tag"
 
 Note that by default posts are hidden like tumblr does with a note about which
 filter has hidden this.  However, if you want to remove a post completely
