@@ -46,6 +46,7 @@ var tumblrReblogLinkRE = regexp.MustCompile(`<a ([^>]*)href="(https?://[^.]+\.tu
 var tumblrAccountLinkRE = regexp.MustCompile(`<a ([^>]*)href="[^"]+"([^>]*)>@([-\w]+)</a>`)                                   // @<account>
 var tumblrLinksRE = regexp.MustCompile(`https?://([^.]+).t?umblr.com([^" ]+)?`)
 var instagramLinksRE = regexp.MustCompile(`https?://(www\.)?instagram.com/([^/" ]+)[^" ]*`)
+var altTextRE = regexp.MustCompile(`alt="([^"]+)"|alt='([^']+)'`)
 var videoRE = regexp.MustCompile(`<video `)
 var autoplayRE = regexp.MustCompile(` autoplay="autoplay"`)
 
@@ -877,6 +878,27 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 				}
 				return "/" + parts[2] + "@instagram"
 			})
+
+			postHTML = altTextRE.ReplaceAllStringFunc(postHTML, func(repl string) string {
+				parts := altTextRE.FindStringSubmatch(repl)
+				if len(parts) != 3 {
+					log.Printf("Error: weird alt tag %q", repl)
+					return repl
+				}
+				if parts[1] == "image" { // many images just have alt="image" which is not helpful
+					return repl
+				}
+
+				res := repl
+				if parts[1] != "" {
+					res += ` title="` + parts[1] + `"`
+				} else {
+					res += ` title='` + parts[2] + `'`
+				}
+				return res
+			})
+			postHTML = strings.Replace(postHTML, `<span class="tmblr-alt-text-helper">ALT</span>`, "", -1)
+
 			if post.Source != "tiktok" {
 				postHTML = videoRE.ReplaceAllStringFunc(postHTML, func(repl string) string {
 					return `<video preload="metadata" controls="" `
