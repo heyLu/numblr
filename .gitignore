@@ -1,4 +1,5 @@
 /numblr
 /cache.db*
 /*.html
+/feed/tumblr/reblog-test.html
 /*.rss
