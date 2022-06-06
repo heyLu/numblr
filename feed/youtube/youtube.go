@@ -103,25 +103,28 @@ func Open(ctx context.Context, name string, search feed.Search) (feed.Feed, erro
 	}
 	defer resp.Body.Close()
 
-	communityPosts, err := parseCommunityPosts(resp.Body)
+	communityPosts, err := parseCommunityPosts(name, avatarURL, resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("parsing community posts: %w", err)
 	}
 
-	feed, err := rss.Open(ctx, "https://www.youtube.com/feeds/videos.xml?channel_id="+url.QueryEscape(channelID), search)
+	ytFeed, err := rss.Open(ctx, "https://www.youtube.com/feeds/videos.xml?channel_id="+url.QueryEscape(channelID), search)
 	if err != nil {
 		return nil, err
 	}
 
-	return &youtubeRSS{name: name, url: channelURL.String(), avatarURL: avatarURL, communityPosts: communityPosts, RSS: feed.(*rss.RSS)}, nil
+	return feed.Merge(&feed.Static{
+		FeedName:        name + "@youtube",
+		FeedURL:         channelURL.String(),
+		FeedDescription: ytFeed.Description(),
+		Posts:           communityPosts,
+	}, &youtubeRSS{name: name, url: channelURL.String(), avatarURL: avatarURL, RSS: ytFeed.(*rss.RSS)}), nil
 }
 
 type youtubeRSS struct {
 	name      string
 	url       string
 	avatarURL string
-
-	communityPosts []*feed.Post
 
 	*rss.RSS
 }
@@ -131,24 +134,10 @@ func (yt *youtubeRSS) Name() string {
 }
 
 func (yt *youtubeRSS) URL() string {
-	fmt.Println("should output the url...", yt.url)
 	return yt.url
 }
 
 func (yt *youtubeRSS) Next() (*feed.Post, error) {
-	// TODO: sort community posts correctly (simply merge feeds?)
-	if len(yt.communityPosts) > 0 {
-		post := yt.communityPosts[0]
-		yt.communityPosts = yt.communityPosts[1:]
-
-		post.Source = "youtube"
-		post.Author = yt.name
-
-		post.AvatarURL = yt.avatarURL
-
-		return post, nil
-	}
-
 	post, err := yt.RSS.Next()
 	if err != nil {
 		return nil, err
@@ -235,7 +224,7 @@ type youtubeChannel struct {
 	} `json:"channelRenderer"`
 }
 
-func parseCommunityPosts(r io.Reader) ([]*feed.Post, error) {
+func parseCommunityPosts(author string, avatarURL string, r io.Reader) ([]feed.Post, error) {
 	buf := new(bytes.Buffer)
 	_, err := io.Copy(buf, &io.LimitedReader{R: r, N: maxResultSize})
 	if err != nil {
@@ -261,7 +250,7 @@ func parseCommunityPosts(r io.Reader) ([]*feed.Post, error) {
 		return nil, fmt.Errorf("parsing search results: %w", err)
 	}
 
-	posts := make([]*feed.Post, 0, len(results))
+	posts := make([]feed.Post, 0, len(results))
 	for _, result := range results {
 		data := result.BackstagePostThreadRenderer.Post.BackstagePostRenderer
 		if data.PostID == "" {
@@ -278,7 +267,10 @@ func parseCommunityPosts(r io.Reader) ([]*feed.Post, error) {
 			description += run.Text
 		}
 
-		post := &feed.Post{
+		post := feed.Post{
+			Source:          "youtube",
+			Author:          author,
+			AvatarURL:       avatarURL,
 			ID:              data.PostID,
 			DescriptionHTML: description,
 			URL:             "https://youtube.com/post/" + url.QueryEscape(data.PostID),

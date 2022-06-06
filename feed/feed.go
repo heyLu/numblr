@@ -88,12 +88,17 @@ type merger struct {
 func (m *merger) Name() string {
 	name := ""
 	first := true
+	seen := make(map[string]bool, len(m.feeds))
 	for _, t := range m.feeds {
+		if seen[t.Name()] {
+			continue
+		}
 		if !first {
 			name += " "
 		}
 		first = false
 		name += t.Name()
+		seen[t.Name()] = true
 	}
 	return name
 }
@@ -156,6 +161,48 @@ func (m *merger) Close() error {
 		err = t.Close()
 	}
 	return err
+}
+
+var _ Feed = &Static{}
+
+// Static is a feed that contains exactly the Posts specified.
+type Static struct {
+	FeedName        string
+	FeedURL         string
+	FeedDescription string
+	Posts           []Post
+}
+
+// Name implements Feed.Name
+func (s *Static) Name() string {
+	return s.FeedName
+}
+
+// Description implements Feed.Description
+func (s *Static) Description() string {
+	return s.FeedDescription
+}
+
+// URL implements Feed.URL
+func (s *Static) URL() string {
+	return s.FeedURL
+}
+
+// Next implements Feed.Next.
+func (s *Static) Next() (*Post, error) {
+	if len(s.Posts) == 0 {
+		return nil, io.EOF
+	}
+
+	post := s.Posts[0]
+	s.Posts = s.Posts[1:]
+
+	return &post, nil
+}
+
+// Close implements Feed.Close.
+func (s *Static) Close() error {
+	return nil
 }
 
 var _ error = StatusError{}
