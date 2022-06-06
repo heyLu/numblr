@@ -658,7 +658,7 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 		fmt.Fprintf(w, `<option value=%q>%s</option>`, tumbl, tumbl)
 	}
 	fmt.Fprintln(w, `</datalist>`)
-	fmt.Fprintf(w, `<form method="GET" action=%q><input aria-label="search posts" name="search" type="search" value=%q placeholder="noreblog #art ..." /></form>`, req.URL.Path, req.URL.Query().Get("search"))
+	fmt.Fprintf(w, `<form method="GET" action=%q><input aria-label="search posts" name="search" type="search" value=%q placeholder="noreblog #art ..." /></form>`, req.URL.Path, html.EscapeString(req.URL.Query().Get("search")))
 
 	postCount := 0
 	var post *feed.Post
