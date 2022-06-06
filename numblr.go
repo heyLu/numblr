@@ -28,14 +28,11 @@ import (
 	"golang.org/x/net/html"
 
 	"github.com/heyLu/numblr/feed"
-	"github.com/heyLu/numblr/feed/ao3"
+	"github.com/heyLu/numblr/feed/anything"
 	"github.com/heyLu/numblr/feed/bibliogram"
 	"github.com/heyLu/numblr/feed/database"
 	"github.com/heyLu/numblr/feed/nitter"
-	"github.com/heyLu/numblr/feed/rss"
-	"github.com/heyLu/numblr/feed/tiktok"
 	"github.com/heyLu/numblr/feed/tumblr"
-	"github.com/heyLu/numblr/feed/youtube"
 )
 
 var contentNoteRE = regexp.MustCompile(`\b(tw|trigger warning|cn|content note|cw|content warning)\b`)
@@ -158,7 +155,7 @@ func main() {
 					ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 					defer cancel()
 
-					feed, err := OpenFeed(ctx, feedName, cacheFn, feed.Search{ForceFresh: true})
+					feed, err := anything.Open(ctx, feedName, cacheFn, feed.Search{ForceFresh: true})
 					if err != nil {
 						return fmt.Errorf("background refresh: opening %s: %s", feedName, err)
 					}
@@ -571,7 +568,7 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 				return
 			}
 
-			feeds[i], openErr = OpenFeed(req.Context(), settings.SelectedFeeds[i], cacheFn, search)
+			feeds[i], openErr = anything.Open(req.Context(), settings.SelectedFeeds[i], cacheFn, search)
 			if openErr != nil {
 				err = fmt.Errorf("%s: %w", settings.SelectedFeeds[i], openErr)
 			}
@@ -1586,28 +1583,6 @@ func filterAttributes(node *html.Node, keepAttrs ...string) {
 		}
 	}
 	node.Attr = attrs
-}
-
-// OpenFeed opens the feed identified by name.
-func OpenFeed(ctx context.Context, name string, cacheFn feed.OpenCached, search feed.Search) (feed.Feed, error) {
-	switch {
-	case strings.HasSuffix(name, "@twitter") || strings.HasSuffix(name, "@t"):
-		return cacheFn(ctx, name, nitter.Open, search)
-	case strings.HasSuffix(name, "@instagram") || strings.HasSuffix(name, "@ig"):
-		return cacheFn(ctx, name, bibliogram.Open, search)
-	case strings.HasSuffix(name, "@youtube") || strings.HasSuffix(name, "@yt"):
-		return cacheFn(ctx, name, youtube.Open, search)
-	case strings.HasSuffix(name, "@tumblr"):
-		return cacheFn(ctx, name, tumblr.Open, search)
-	case strings.Contains(name, "www.tiktok.com") || strings.HasSuffix(name, "@tiktok"):
-		return cacheFn(ctx, name, tiktok.Open, search)
-	case strings.Contains(name, "archiveofourown.org") || strings.HasSuffix(name, "@ao3"):
-		return cacheFn(ctx, name, ao3.Open, search)
-	case strings.Contains(name, "@") || strings.Contains(name, "."):
-		return cacheFn(ctx, name, rss.Open, search)
-	default:
-		return cacheFn(ctx, name, tumblr.Open, search)
-	}
 }
 
 type sortByFunc struct {
