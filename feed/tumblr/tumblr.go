@@ -1,4 +1,4 @@
-package main
+package tumblr
 
 import (
 	"bytes"
@@ -12,13 +12,14 @@ import (
 	"time"
 
 	"github.com/heyLu/numblr/feed"
-	"github.com/heyLu/numblr/search"
 	"golang.org/x/net/html"
 )
 
+// TumblrDate is the date format used in Tumblr's RSS feeds
 const TumblrDate = "Mon, 2 Jan 2006 15:04:05 -0700"
 
-func NewTumblrRSS(ctx context.Context, name string, _ search.Search) (feed.Feed, error) {
+// Open opens a new Feed for tumblr account `name`.
+func Open(ctx context.Context, name string, _ feed.Search) (feed.Feed, error) {
 	nameIdx := strings.Index(name, "@")
 	if nameIdx != -1 {
 		name = name[:nameIdx]
@@ -153,6 +154,8 @@ func (tr *tumblrRSS) Close() error {
 	return tr.r.Close()
 }
 
+// FlattenReblogs flattens the nested blockquotes from Tumblr into a flat
+// structure where each reblog is in a blockquote at one level, oldest-first.
 func FlattenReblogs(reblogHTML string) (flattenedHTML string, err error) {
 	node, err := html.Parse(strings.NewReader(reblogHTML))
 	if err != nil {

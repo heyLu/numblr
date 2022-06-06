@@ -1,4 +1,4 @@
-package main
+package nitter
 
 import (
 	"context"
@@ -7,35 +7,34 @@ import (
 	"strings"
 
 	"github.com/heyLu/numblr/feed"
-	"github.com/heyLu/numblr/search"
+	"github.com/heyLu/numblr/feed/rss"
 )
 
-const NitterDate = "Mon, 2 Jan 2006 15:04:05 MST"
-
+// NitterURL is the nitter instance to use to fetch twitter feeds.
 var NitterURL = "https://nitter.net"
 
-// NewNitter creates a new feed for Twitter, via Nitter.
+// Open creates a new feed for Twitter, via Nitter.
 //
 // See https://github.com/zedeus/nitter.
-func NewNitter(ctx context.Context, name string, search search.Search) (feed.Feed, error) {
+func Open(ctx context.Context, name string, search feed.Search) (feed.Feed, error) {
 	nameIdx := strings.Index(name, "@")
 	rssURL := fmt.Sprintf("%s/%s/rss", NitterURL, name[:nameIdx])
 	if strings.HasPrefix(name[:nameIdx], "#") {
 		rssURL = fmt.Sprintf("%s/search?q=%s", NitterURL, url.QueryEscape(name[:nameIdx]))
 	}
 
-	feed, err := NewRSS(ctx, rssURL, search)
+	feed, err := rss.Open(ctx, rssURL, search)
 	if err != nil {
 		return nil, err
 	}
 
-	return &nitterRSS{name: name, rss: feed.(*rss)}, nil
+	return &nitterRSS{name: name, RSS: feed.(*rss.RSS)}, nil
 }
 
 type nitterRSS struct {
 	name string
 
-	*rss
+	*rss.RSS
 }
 
 func (nr *nitterRSS) Name() string {
@@ -48,14 +47,14 @@ func (nr *nitterRSS) URL() string {
 }
 
 func (nr *nitterRSS) Next() (*feed.Post, error) {
-	post, err := nr.rss.Next()
+	post, err := nr.RSS.Next()
 	if err != nil {
 		return nil, err
 	}
 
 	// skip pinned posts as they mess up post sorting (for now)
 	if strings.HasPrefix(post.Title, "<h1>Pinned: ") {
-		return nr.rss.Next()
+		return nr.RSS.Next()
 	}
 
 	// TODO: render nitter posts nicer

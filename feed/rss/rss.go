@@ -1,4 +1,4 @@
-package main
+package rss
 
 import (
 	"bytes"
@@ -12,7 +12,6 @@ import (
 
 	"github.com/andybalholm/cascadia"
 	"github.com/heyLu/numblr/feed"
-	"github.com/heyLu/numblr/search"
 	"github.com/mmcdole/gofeed"
 	"golang.org/x/net/html"
 )
@@ -21,15 +20,17 @@ func init() {
 	if http.DefaultClient.Jar == nil {
 		cookiesPerDomain := make(map[string][]*http.Cookie)
 		cookiesPerDomain["livejournal.com"] = []*http.Cookie{
-			&http.Cookie{Name: "adult_explicit", Value: "1"},
+			{Name: "adult_explicit", Value: "1"},
 		}
 		http.DefaultClient.Jar = domainCookieJar(cookiesPerDomain)
 	}
 }
 
-var RelAlternateMatcher = cascadia.MustCompile(`link[rel=alternate]`)
+var relAlternateMatcher = cascadia.MustCompile(`link[rel=alternate]`)
 
-func NewRSS(ctx context.Context, name string, _ search.Search) (feed.Feed, error) {
+// Open opens the RSS feed at `name`, trying to find it automatically using
+// `rel=alternate` links.
+func Open(ctx context.Context, name string, _ feed.Search) (feed.Feed, error) {
 	feedURL := name
 	if strings.Contains(name, "@") {
 		parts := strings.SplitN(name, "@", 2)
@@ -81,7 +82,7 @@ func NewRSS(ctx context.Context, name string, _ search.Search) (feed.Feed, error
 			return nil, fmt.Errorf("parse html: %w", err)
 		}
 
-		nodes := cascadia.QueryAll(node, RelAlternateMatcher)
+		nodes := cascadia.QueryAll(node, relAlternateMatcher)
 		found := false
 		var url string
 		for _, alternate := range nodes {
@@ -132,28 +133,42 @@ func NewRSS(ctx context.Context, name string, _ search.Search) (feed.Feed, error
 		return nil, fmt.Errorf("parse: %w", err)
 	}
 
-	return &rss{name: name, feed: feed}, nil
+	return &RSS{name: name, feed: feed}, nil
 }
 
-type rss struct {
+func hasAttribute(node *html.Node, attrName, attrValue string) bool {
+	for _, attr := range node.Attr {
+		if attr.Key == attrName && attr.Val == attrValue {
+			return true
+		}
+	}
+	return false
+}
+
+// RSS is a Feed implementation for RSS (and ATOM) feeds.
+type RSS struct {
 	name string
 	feed *gofeed.Feed
 	item *gofeed.Item
 }
 
-func (rss *rss) Name() string {
+// Name implements Feed.Name.
+func (rss *RSS) Name() string {
 	return rss.name
 }
 
-func (rss *rss) Description() string {
+// Description implements Feed.Description.
+func (rss *RSS) Description() string {
 	return rss.feed.Description
 }
 
-func (rss *rss) URL() string {
+// URL implements Feed.URL.
+func (rss *RSS) URL() string {
 	return rss.feed.Link
 }
 
-func (rss *rss) Next() (*feed.Post, error) {
+// Next implements Feed.Next.
+func (rss *RSS) Next() (*feed.Post, error) {
 	if len(rss.feed.Items) == 0 {
 		return nil, io.EOF
 	}
@@ -201,11 +216,13 @@ func (rss *rss) Next() (*feed.Post, error) {
 	}, nil
 }
 
-func (rss *rss) FeedItem() *gofeed.Item {
+// FeedItem returns the current gofeed.Item, as navigated to using `Next`.
+func (rss *RSS) FeedItem() *gofeed.Item {
 	return rss.item
 }
 
-func (rss *rss) Close() error {
+// Close implements Feed.Close.
+func (rss *RSS) Close() error {
 	return nil
 }
 

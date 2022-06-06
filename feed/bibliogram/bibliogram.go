@@ -1,4 +1,4 @@
-package main
+package bibliogram
 
 import (
 	"context"
@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/heyLu/numblr/feed"
-	"github.com/heyLu/numblr/search"
+	"github.com/heyLu/numblr/feed/rss"
 )
 
 // BibliogramInstancesURL is the url used to discover available Bibliogram instances.
@@ -25,10 +25,10 @@ func init() {
 	rand.Seed(time.Now().UnixNano())
 }
 
-// NewBibliogram creates a new feed for Instagram, via Bibliogram.
+// Open creates a new feed for Instagram, via Bibliogram.
 //
 // See https://git.sr.ht/~cadence/bibliogram.
-func NewBibliogram(ctx context.Context, name string, search search.Search) (feed.Feed, error) {
+func Open(ctx context.Context, name string, search feed.Search) (feed.Feed, error) {
 	if !bibliogramInitialized {
 		var err error
 		bibliogramInstances, err = initBibliogram(ctx)
@@ -47,7 +47,7 @@ func NewBibliogram(ctx context.Context, name string, search search.Search) (feed
 	for attempts := 0; attempts < len(bibliogramInstances); attempts++ {
 		rssURL = bibliogramInstances[rand.Intn(len(bibliogramInstances))] + fmt.Sprintf("/u/%s/rss.xml", url.PathEscape(name[:nameIdx]))
 
-		rssFeed, err = NewRSS(ctx, rssURL, search)
+		rssFeed, err = rss.Open(ctx, rssURL, search)
 		if err != nil {
 			var statusErr feed.StatusError
 			if ok := errors.As(err, &statusErr); ok {

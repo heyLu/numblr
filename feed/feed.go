@@ -1,6 +1,7 @@
 package feed
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -35,6 +36,16 @@ type Feed interface {
 type Notes interface {
 	Notes() string
 }
+
+// Open is a function that opens a feed identified by `name`.
+//
+// All feeds currently implement this.
+type Open func(ctx context.Context, name string, search Search) (Feed, error)
+
+// OpenCached is a function that caches the feed identified by `name`.
+//
+// database.OpenCached is currently the only implementation, backed by sqlite.
+type OpenCached func(ctx context.Context, name string, uncached Open, search Search) (Feed, error)
 
 // Post is a single post, e.g. a blog post or a tweet.
 type Post struct {

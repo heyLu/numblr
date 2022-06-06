@@ -1,4 +1,4 @@
-package main
+package tiktok
 
 import (
 	"bytes"
@@ -21,7 +21,6 @@ import (
 	"golang.org/x/net/html"
 
 	"github.com/heyLu/numblr/feed"
-	"github.com/heyLu/numblr/search"
 )
 
 var tiktokRequestCountMu sync.Mutex
@@ -115,8 +114,8 @@ type tiktokAccountData struct {
 	} `json:"UserPage"`
 }
 
-// NewTikTok fetches the feed for user `name` from TikTok.
-func NewTikTok(ctx context.Context, name string, _ search.Search) (feed.Feed, error) {
+// Open fetches the feed for user `name` from TikTok.
+func Open(ctx context.Context, name string, _ feed.Search) (feed.Feed, error) {
 	nameIdx := strings.Index(name, "@")
 	if !strings.Contains(name, "https://") && nameIdx != -1 {
 		name = "https://www.tiktok.com/@" + name[:nameIdx]

@@ -1,4 +1,4 @@
-package search
+package feed
 
 import (
 	"bytes"
@@ -8,8 +8,6 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
-
-	"github.com/heyLu/numblr/feed"
 )
 
 // Search represents a search in a feed.
@@ -57,7 +55,7 @@ func (s *Search) String() string {
 }
 
 // Matches returns true if the post matches the search.
-func (s *Search) Matches(p *feed.Post) bool {
+func (s *Search) Matches(p *Post) bool {
 	if !s.IsActive {
 		return true
 	}

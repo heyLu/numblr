@@ -1,4 +1,4 @@
-package main
+package youtube
 
 import (
 	"bytes"
@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/heyLu/numblr/feed"
-	"github.com/heyLu/numblr/search"
+	"github.com/heyLu/numblr/feed/rss"
 )
 
 // maxResultSize is the maximum amount of bytes to read from a YouTube
@@ -22,8 +22,8 @@ const maxResultSize = 300 * 1000 * 1000
 
 var searchResultStart = []byte(`{"primaryContents":{"sectionListRenderer":{"contents":[{"itemSectionRenderer":{"contents":`)
 
-// NewYoutube creates a new feed for YouTube.
-func NewYoutube(ctx context.Context, name string, search search.Search) (feed.Feed, error) {
+// Open creates a new feed for YouTube.
+func Open(ctx context.Context, name string, search feed.Search) (feed.Feed, error) {
 	nameIdx := strings.Index(name, "@")
 
 	name = name[:nameIdx]
@@ -108,12 +108,12 @@ func NewYoutube(ctx context.Context, name string, search search.Search) (feed.Fe
 		return nil, fmt.Errorf("parsing community posts: %w", err)
 	}
 
-	feed, err := NewRSS(ctx, "https://www.youtube.com/feeds/videos.xml?channel_id="+url.QueryEscape(channelID), search)
+	feed, err := rss.Open(ctx, "https://www.youtube.com/feeds/videos.xml?channel_id="+url.QueryEscape(channelID), search)
 	if err != nil {
 		return nil, err
 	}
 
-	return &youtubeRSS{name: name, url: channelURL.String(), avatarURL: avatarURL, communityPosts: communityPosts, rss: feed.(*rss)}, nil
+	return &youtubeRSS{name: name, url: channelURL.String(), avatarURL: avatarURL, communityPosts: communityPosts, RSS: feed.(*rss.RSS)}, nil
 }
 
 type youtubeRSS struct {
@@ -123,7 +123,7 @@ type youtubeRSS struct {
 
 	communityPosts []*feed.Post
 
-	*rss
+	*rss.RSS
 }
 
 func (yt *youtubeRSS) Name() string {
@@ -149,7 +149,7 @@ func (yt *youtubeRSS) Next() (*feed.Post, error) {
 		return post, nil
 	}
 
-	post, err := yt.rss.Next()
+	post, err := yt.RSS.Next()
 	if err != nil {
 		return nil, err
 	}

@@ -1,15 +1,16 @@
-package main
+package ao3
 
 import (
 	"context"
 	"testing"
 	"time"
 
+	"github.com/heyLu/numblr/feed"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestAO3AuthorFandomFeed(t *testing.T) {
-	feed, err := NewAO3(context.Background(), "https://archiveofourown.org/users/astolat/works?fandom_id=136512&work_search[query]=vid", Search{})
+	feed, err := Open(context.Background(), "https://archiveofourown.org/users/astolat/works?fandom_id=136512&work_search[query]=vid", feed.Search{})
 	assert.NoError(t, err, "new")
 
 	assert.Len(t, feed.(*ao3).works, 1)

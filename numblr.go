@@ -24,10 +24,18 @@ import (
 	"github.com/NYTimes/gziphandler"
 	"github.com/gorilla/mux"
 	lru "github.com/hashicorp/golang-lru"
-	"github.com/heyLu/numblr/feed"
-	"github.com/heyLu/numblr/search"
 	"github.com/yuin/goldmark"
 	"golang.org/x/net/html"
+
+	"github.com/heyLu/numblr/feed"
+	"github.com/heyLu/numblr/feed/ao3"
+	"github.com/heyLu/numblr/feed/bibliogram"
+	"github.com/heyLu/numblr/feed/database"
+	"github.com/heyLu/numblr/feed/nitter"
+	"github.com/heyLu/numblr/feed/rss"
+	"github.com/heyLu/numblr/feed/tiktok"
+	"github.com/heyLu/numblr/feed/tumblr"
+	"github.com/heyLu/numblr/feed/youtube"
 )
 
 var contentNoteRE = regexp.MustCompile(`\b(tw|trigger warning|cn|content note|cw|content warning)\b`)
@@ -78,7 +86,7 @@ var ChangelogBytes []byte
 //go:embed help.md
 var HelpBytes []byte
 
-var cacheFn CacheFn = nil
+var cacheFn feed.OpenCached = nil
 
 var avatarCache *lru.Cache
 
@@ -105,8 +113,8 @@ func main() {
 	flag.StringVar(&config.DefaultFeed, "default", "staff,engineering", "Default feeds to view")
 	flag.StringVar(&config.AppDisplayMode, "app-display", "browser", "Display mode to use when installed as an app")
 	flag.BoolVar(&config.CollectStats, "stats", false, "Whether to collect anonymized stats (num cached feeds & posts, recent errors & user agents")
-	flag.StringVar(&NitterURL, "nitter-url", "https://nitter.net", "Nitter instance to use")
-	flag.StringVar(&BibliogramInstancesURL, "bibliogram-instances-url", BibliogramInstancesURL, "The bibliogram url to use to fetch possible instances from")
+	flag.StringVar(&nitter.NitterURL, "nitter-url", "https://nitter.net", "Nitter instance to use")
+	flag.StringVar(&bibliogram.BibliogramInstancesURL, "bibliogram-instances-url", bibliogram.BibliogramInstancesURL, "The bibliogram url to use to fetch possible instances from")
 	flag.Parse()
 
 	http.DefaultClient.Timeout = 10 * time.Second
@@ -121,13 +129,13 @@ func main() {
 		log.SetOutput(io.MultiWriter(os.Stdout, &CollectLogsWriter{}))
 	}
 
-	db, err := InitDatabase(config.DatabasePath)
+	db, err := database.InitDatabase(config.DatabasePath)
 	if err != nil {
 		log.Fatalf("setup database: %s", err)
 	}
 
-	cacheFn = func(ctx context.Context, name string, uncachedFn FeedFn, search search.Search) (feed.Feed, error) {
-		return NewDatabaseCached(ctx, db, name, uncachedFn, search)
+	cacheFn = func(ctx context.Context, name string, uncachedFn feed.Open, search feed.Search) (feed.Feed, error) {
+		return database.OpenCached(ctx, db, name, uncachedFn, search)
 	}
 
 	if config.CollectStats {
@@ -138,7 +146,7 @@ func main() {
 		maxConcurrentFeeds := make(chan bool, 100)
 
 		refreshFn := func() {
-			feeds, err := ListFeedsOlderThan(context.Background(), db, time.Now().Add(-CacheTime))
+			feeds, err := database.ListFeedsOlderThan(context.Background(), db, time.Now().Add(-CacheTime))
 			if err != nil {
 				log.Printf("Error: listing feeds in background: %s", err)
 				return
@@ -150,7 +158,7 @@ func main() {
 					ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 					defer cancel()
 
-					feed, err := NewCachedFeed(ctx, feedName, cacheFn, search.Search{ForceFresh: true})
+					feed, err := OpenFeed(ctx, feedName, cacheFn, feed.Search{ForceFresh: true})
 					if err != nil {
 						return fmt.Errorf("background refresh: opening %s: %s", feedName, err)
 					}
@@ -527,7 +535,7 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 	}
 
 	settings := SettingsFromRequest(req)
-	search := search.FromRequest(req)
+	search := feed.FromRequest(req)
 
 	if tag != "" {
 		search.IsActive = true
@@ -563,7 +571,7 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 				return
 			}
 
-			feeds[i], openErr = NewCachedFeed(req.Context(), settings.SelectedFeeds[i], cacheFn, search)
+			feeds[i], openErr = OpenFeed(req.Context(), settings.SelectedFeeds[i], cacheFn, search)
 			if openErr != nil {
 				err = fmt.Errorf("%s: %w", settings.SelectedFeeds[i], openErr)
 			}
@@ -786,7 +794,7 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 				postHTML = html.UnescapeString(post.Title)
 			}
 			if post.Source == "tumblr" && post.IsReblog() {
-				reblogHTML, err := FlattenReblogs(post.DescriptionHTML)
+				reblogHTML, err := tumblr.FlattenReblogs(post.DescriptionHTML)
 				if err != nil {
 					log.Printf("Error: flatten reblog: %s", err)
 				}
@@ -1179,10 +1187,10 @@ type Settings struct {
 	// Searches are feed-specific searches that apply additional filters to
 	// specific feeds, e.g. when you want to filter out or filter on things
 	// from those feeds.
-	Searches map[string]search.Search
+	Searches map[string]feed.Search
 
 	// GlobalSearch is a persistent search that applies to all feeds.
-	GlobalSearch search.Search
+	GlobalSearch feed.Search
 }
 
 func SettingsFromRequest(req *http.Request) Settings {
@@ -1190,12 +1198,12 @@ func SettingsFromRequest(req *http.Request) Settings {
 
 	feeds := getFeeds(req)
 	settings.SelectedFeeds = make([]string, 0, len(feeds))
-	settings.Searches = make(map[string]search.Search)
+	settings.Searches = make(map[string]feed.Search)
 
-	for _, feed := range feeds {
-		parts := strings.SplitN(feed, " ", 2)
+	for _, feedName := range feeds {
+		parts := strings.SplitN(feedName, " ", 2)
 		if len(parts) == 2 {
-			s := search.ParseTerms(parts[1])
+			s := feed.ParseTerms(parts[1])
 
 			if parts[0] == "*" {
 				settings.GlobalSearch = s
@@ -1580,27 +1588,25 @@ func filterAttributes(node *html.Node, keepAttrs ...string) {
 	node.Attr = attrs
 }
 
-type FeedFn func(ctx context.Context, name string, search search.Search) (feed.Feed, error)
-type CacheFn func(ctx context.Context, name string, uncachedFn FeedFn, search search.Search) (feed.Feed, error)
-
-func NewCachedFeed(ctx context.Context, name string, cacheFn CacheFn, search search.Search) (feed.Feed, error) {
+// OpenFeed opens the feed identified by name.
+func OpenFeed(ctx context.Context, name string, cacheFn feed.OpenCached, search feed.Search) (feed.Feed, error) {
 	switch {
 	case strings.HasSuffix(name, "@twitter") || strings.HasSuffix(name, "@t"):
-		return cacheFn(ctx, name, NewNitter, search)
+		return cacheFn(ctx, name, nitter.Open, search)
 	case strings.HasSuffix(name, "@instagram") || strings.HasSuffix(name, "@ig"):
-		return cacheFn(ctx, name, NewBibliogram, search)
+		return cacheFn(ctx, name, bibliogram.Open, search)
 	case strings.HasSuffix(name, "@youtube") || strings.HasSuffix(name, "@yt"):
-		return cacheFn(ctx, name, NewYoutube, search)
+		return cacheFn(ctx, name, youtube.Open, search)
 	case strings.HasSuffix(name, "@tumblr"):
-		return cacheFn(ctx, name, NewTumblrRSS, search)
+		return cacheFn(ctx, name, tumblr.Open, search)
 	case strings.Contains(name, "www.tiktok.com") || strings.HasSuffix(name, "@tiktok"):
-		return cacheFn(ctx, name, NewTikTok, search)
+		return cacheFn(ctx, name, tiktok.Open, search)
 	case strings.Contains(name, "archiveofourown.org") || strings.HasSuffix(name, "@ao3"):
-		return cacheFn(ctx, name, NewAO3, search)
+		return cacheFn(ctx, name, ao3.Open, search)
 	case strings.Contains(name, "@") || strings.Contains(name, "."):
-		return cacheFn(ctx, name, NewRSS, search)
+		return cacheFn(ctx, name, rss.Open, search)
 	default:
-		return cacheFn(ctx, name, NewTumblrRSS, search)
+		return cacheFn(ctx, name, tumblr.Open, search)
 	}
 }
 

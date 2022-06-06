@@ -1,4 +1,4 @@
-package main
+package database
 
 import (
 	"context"
@@ -12,16 +12,20 @@ import (
 	"strings"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/mattn/go-sqlite3" // use sqlite3 for this feed
 
 	"github.com/heyLu/numblr/feed"
-	"github.com/heyLu/numblr/search"
 )
 
+// CacheTime is the duration that feeds should be cached for.
+var CacheTime time.Duration
+
+// InitDatabase creates a cache database at dbPath and returns a connection to
+// it.
 func InitDatabase(dbPath string) (*sql.DB, error) {
 	if dbPath == "" {
 		dbPath = "file::memory:?mode=memory&cache=shared"
-	} else if !strings.HasPrefix(config.DatabasePath, "file:") {
+	} else if !strings.HasPrefix(dbPath, "file:") {
 		dbPath = "file:" + dbPath + "?_journal_mode=WAL&_busy_timeout=50"
 	}
 
@@ -55,6 +59,7 @@ func InitDatabase(dbPath string) (*sql.DB, error) {
 	return db, err
 }
 
+// ListFeedsOlderThan lists feeds older than time so that they can be updated.
 func ListFeedsOlderThan(ctx context.Context, db *sql.DB, olderThan time.Time) ([]string, error) {
 	tx, err := db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
@@ -86,7 +91,9 @@ func ListFeedsOlderThan(ctx context.Context, db *sql.DB, olderThan time.Time) ([
 	return feeds, nil
 }
 
-func NewDatabaseCached(ctx context.Context, db *sql.DB, name string, uncachedFn FeedFn, search search.Search) (feed.Feed, error) {
+// OpenCached returns a feed that is either already cached or one that will
+// cache the uncached in the database one as it is iterated through.
+func OpenCached(ctx context.Context, db *sql.DB, name string, uncachedFn feed.Open, search feed.Search) (feed.Feed, error) {
 	// FIXME: cache non-canonical names correctly (e.g. oops@tumblr should be looked up as `oops`)
 	row := db.QueryRowContext(ctx, "SELECT cached_at, url, description, error FROM feed_infos WHERE name = ?", name)
 	var cachedAt time.Time
@@ -178,7 +185,6 @@ func NewDatabaseCached(ctx context.Context, db *sql.DB, name string, uncachedFn 
 		_, updateErr := db.Exec(`INSERT OR REPLACE INTO feed_infos VALUES (?, ?, ?, ?, ?)`, name, url, time.Now(), description, err.Error())
 		if updateErr != nil {
 			updateErr = fmt.Errorf("update feed_infos after error: %w", updateErr)
-			CollectError(updateErr)
 			log.Printf("Error: %s", updateErr)
 		}
 

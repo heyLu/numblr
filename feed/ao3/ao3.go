@@ -1,4 +1,4 @@
-package main
+package ao3
 
 import (
 	"bytes"
@@ -14,7 +14,6 @@ import (
 	"golang.org/x/net/html"
 
 	"github.com/heyLu/numblr/feed"
-	"github.com/heyLu/numblr/search"
 )
 
 var workMatcher = cascadia.MustCompile("li.work")
@@ -32,7 +31,8 @@ type ao3 struct {
 	works []*html.Node
 }
 
-func NewAO3(ctx context.Context, name string, _ search.Search) (feed.Feed, error) {
+// Open opens the feed with the given account name (or works url) from AO3.
+func Open(ctx context.Context, name string, _ feed.Search) (feed.Feed, error) {
 	// TODO: implement ao3 search
 	nameIdx := strings.Index(name, "@")
 	if nameIdx != -1 {
