@@ -1220,19 +1220,36 @@ func SettingsFromRequest(req *http.Request) Settings {
 	settings.Searches = make(map[string]feed.Search)
 
 	for _, feedName := range feeds {
-		parts := strings.SplitN(feedName, " ", 2)
-		if len(parts) == 2 {
-			s := feed.ParseTerms(parts[1])
+		splitAt := 0
+		// if @xyz in feedName, split after occurence of first @
+		atIdx := strings.Index(feedName, "@")
+		if atIdx != -1 {
+			splitAt = atIdx
+		}
 
-			if parts[0] == "*" {
+		spaceIdx := strings.Index(feedName[splitAt:], " ")
+		var name string
+		var search string
+		if spaceIdx == -1 {
+			name = feedName
+			search = ""
+		} else {
+			name = feedName[:splitAt+spaceIdx]
+			search = feedName[splitAt+spaceIdx+1:]
+		}
+		fmt.Printf("%q filtered by %q\n", name, search)
+		if search != "" {
+			s := feed.ParseTerms(search)
+
+			if name == "*" {
 				settings.GlobalSearch = s
 				continue
 			}
 
-			settings.Searches[parts[0]] = s
+			settings.Searches[name] = s
 		}
 
-		settings.SelectedFeeds = append(settings.SelectedFeeds, parts[0])
+		settings.SelectedFeeds = append(settings.SelectedFeeds, name)
 	}
 
 	return settings
