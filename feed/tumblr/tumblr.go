@@ -33,8 +33,9 @@ func Open(ctx context.Context, name string, _ feed.Search) (feed.Feed, error) {
 	if err != nil {
 		return nil, fmt.Errorf("download %q: %w", name, err)
 	}
+	defer resp.Body.Close()
+
 	if resp.StatusCode != 200 {
-		resp.Body.Close()
 		return nil, fmt.Errorf("download: %w", feed.StatusError{Code: resp.StatusCode})
 	}
 
@@ -45,8 +46,14 @@ func Open(ctx context.Context, name string, _ feed.Search) (feed.Feed, error) {
 	var title string
 	var description string
 
+	buf := new(bytes.Buffer)
+	_, err = io.Copy(buf, &io.LimitedReader{R: resp.Body, N: 1 * 1024 * 1024})
+	if err != nil {
+		return nil, fmt.Errorf("reading feed: %w", err)
+	}
+
 	// TODO: use regular feed reader instead (slowness may come from here?  should actually test this theory)
-	dec := xml.NewDecoder(resp.Body)
+	dec := xml.NewDecoder(buf)
 	token, err := dec.Token()
 	for err == nil {
 		if el, ok := token.(xml.EndElement); ok && el.Name.Local == "link" {
@@ -76,7 +83,6 @@ func Open(ctx context.Context, name string, _ feed.Search) (feed.Feed, error) {
 		token, err = dec.Token()
 	}
 	if err != nil && err != io.EOF {
-		resp.Body.Close()
 		return nil, fmt.Errorf("skip token: %w", err)
 	}
 
@@ -88,7 +94,7 @@ func Open(ctx context.Context, name string, _ feed.Search) (feed.Feed, error) {
 		}
 	}
 
-	return &tumblrRSS{name: name, description: description, r: resp.Body, dec: dec, dateFormat: TumblrDate}, nil
+	return &tumblrRSS{name: name, description: description, r: io.NopCloser(buf), dec: dec, dateFormat: TumblrDate}, nil
 }
 
 type tumblrRSS struct {
