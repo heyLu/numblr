@@ -157,8 +157,15 @@ func (m *merger) Next() (*Post, error) {
 
 func (m *merger) Close() error {
 	var err error
+	numErrors := 0
 	for _, t := range m.feeds {
 		err = t.Close()
+		if err != nil {
+			numErrors++
+		}
+	}
+	if numErrors > 1 {
+		return fmt.Errorf("%w (and %d more errors)", err, numErrors-1)
 	}
 	return err
 }

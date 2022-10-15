@@ -190,7 +190,6 @@ func ParseTerms(rawSearch string) Search {
 				} else {
 					searchTerm = rawSearch[quoteIdx+1 : nextQuoteIdx+1]
 					rawSearch = rawSearch[nextQuoteIdx+2:]
-					fmt.Printf("%q %q\n", searchTerm, rawSearch)
 				}
 			}
 		}

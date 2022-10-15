@@ -178,7 +178,7 @@ func CollectUser(s string) {
 
 func StatsHandler(w http.ResponseWriter, req *http.Request) {
 	if globalStats == nil {
-		w.Write([]byte("stats not enabled"))
+		_, _ = w.Write([]byte("stats not enabled"))
 		return
 	}
 

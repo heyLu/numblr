@@ -37,7 +37,6 @@ import (
 
 var contentNoteRE = regexp.MustCompile(`\b(tw|trigger warning|cn|content note|cw|content warning)\b`)
 var imgRE = regexp.MustCompile(`<img `)
-var widthHeightRE = regexp.MustCompile(` (width|height|style)="[^"]+"`)
 var origWidthHeightRE = regexp.MustCompile(`data-orig-width="(\d+)" data-orig-height="(\d+)"`)
 var origHeightWidthRE = regexp.MustCompile(`data-orig-height="(\d+)" data-orig-width="(\d+)"`)
 var blankLinksRE = regexp.MustCompile(` target="_blank"`)
@@ -87,12 +86,6 @@ var HelpBytes []byte
 var cacheFn feed.OpenCached = nil
 
 var avatarCache *lru.Cache
-
-var httpClient = &http.Client{
-	CheckRedirect: func(req *http.Request, via []*http.Request) error {
-		return http.ErrUseLastResponse
-	},
-}
 
 type userAgentTransport struct {
 	UserAgent string
@@ -217,8 +210,7 @@ func main() {
 	})
 	router.HandleFunc("/favicon.png", func(w http.ResponseWriter, req *http.Request) {
 		w.Header().Set("Content-Type", "image/png")
-		w.Write(FaviconPNGBytes)
-		return
+		_, _ = w.Write(FaviconPNGBytes)
 	})
 
 	router.HandleFunc("/robots.txt", func(w http.ResponseWriter, req *http.Request) {
@@ -358,7 +350,7 @@ self.addEventListener('install', function(e) {
 			return
 		}
 
-		req, err := http.NewRequest("GET", proxyURL, nil)
+		req, err := http.NewRequestWithContext(req.Context(), "GET", proxyURL, nil)
 		if err != nil {
 			log.Printf("Error: new request: %s", err)
 			return
@@ -371,7 +363,7 @@ self.addEventListener('install', function(e) {
 		}
 		defer resp.Body.Close()
 
-		io.Copy(w, resp.Body)
+		_, _ = io.Copy(w, resp.Body)
 	})
 
 	router.HandleFunc("/", HandleTumblr)
@@ -447,7 +439,7 @@ func HandleAvatar(w http.ResponseWriter, req *http.Request) {
 	avatar, isCached := avatarCache.Get(tumblr)
 	if isCached {
 		w.Header().Set("Cache-Control", fmt.Sprintf("public, max-age=%d, immutable", int(AvatarCacheTime.Seconds())))
-		w.Write(avatar.([]byte))
+		_, _ = w.Write(avatar.([]byte))
 		return
 	}
 
@@ -482,7 +474,7 @@ func HandleAvatar(w http.ResponseWriter, req *http.Request) {
 	buf := new(bytes.Buffer)
 	wr := io.MultiWriter(w, buf)
 
-	avatar = resp.Header.Get("Location")
+	//avatar = resp.Header.Get("Location")
 	w.Header().Set("Cache-Control", fmt.Sprintf("max-age=%d", int(AvatarCacheTime.Seconds())))
 
 	_, err = io.Copy(wr, resp.Body)
@@ -810,7 +802,6 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 				}
 				return `<img `
 			})
-			//postHTML = widthHeightRE.ReplaceAllString(postHTML, ` `)
 			postHTML = origWidthHeightRE.ReplaceAllStringFunc(postHTML, func(repl string) string {
 				parts := origWidthHeightRE.FindStringSubmatch(repl)
 				if len(parts) != 3 {
@@ -937,7 +928,7 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 
 					tagFound := false
 					for _, searchTag := range search.Tags {
-						if strings.ToLower(tag) == strings.ToLower(searchTag) {
+						if strings.EqualFold(tag, searchTag) {
 							tagFound = true
 						}
 					}
@@ -1237,7 +1228,6 @@ func SettingsFromRequest(req *http.Request) Settings {
 			name = feedName[:splitAt+spaceIdx]
 			search = feedName[splitAt+spaceIdx+1:]
 		}
-		fmt.Printf("%q filtered by %q\n", name, search)
 		if search != "" {
 			s := feed.ParseTerms(search)
 

@@ -65,10 +65,10 @@ func ListFeedsOlderThan(ctx context.Context, db *sql.DB, olderThan time.Time) ([
 	if err != nil {
 		return nil, fmt.Errorf("begin tx: %w", err)
 	}
-	defer tx.Commit()
 
 	rows, err := tx.Query(`SELECT name FROM feed_infos WHERE ? > cached_at`, olderThan)
 	if err != nil {
+		_ = tx.Rollback()
 		return nil, fmt.Errorf("select: %w", err)
 	}
 	defer rows.Close()
@@ -78,6 +78,7 @@ func ListFeedsOlderThan(ctx context.Context, db *sql.DB, olderThan time.Time) ([
 		var feed string
 		err := rows.Scan(&feed)
 		if err != nil {
+			_ = tx.Rollback()
 			return nil, fmt.Errorf("scan: %w", err)
 		}
 
@@ -85,10 +86,11 @@ func ListFeedsOlderThan(ctx context.Context, db *sql.DB, olderThan time.Time) ([
 	}
 
 	if rows.Err() != nil {
+		_ = tx.Rollback()
 		return nil, fmt.Errorf("after scan: %w", rows.Err())
 	}
 
-	return feeds, nil
+	return feeds, tx.Commit()
 }
 
 // OpenCached returns a feed that is either already cached or one that will
@@ -154,11 +156,10 @@ func OpenCached(ctx context.Context, db *sql.DB, name string, uncachedFn feed.Op
 
 	}
 
-	cancel := func() {}
-
 	_, hasTimeout := ctx.Deadline()
 	timedCtx := ctx
 	if !search.ForceFresh && !hasTimeout && isCached {
+		var cancel func()
 		// if we have the feed cached and the uncached one took too long, return the cached one
 		timedCtx, cancel = context.WithTimeout(ctx, 150*time.Millisecond)
 		defer cancel()
@@ -288,17 +289,17 @@ func (ct *databaseCaching) Save() error {
 		// 	TEXT, description_html TEXT, tags TEXT, date_string TEXT, date TIME, PRIMARY KEY (name, id))`)
 
 		if post.ID == "" {
-			tx.Rollback()
+			_ = tx.Rollback()
 			return fmt.Errorf("empty post id: %#v", post)
 		}
 		if post.Source == "" {
-			tx.Rollback()
+			_ = tx.Rollback()
 			return fmt.Errorf("empty post source: %#v", post)
 		}
 
 		tagsJSON, err := json.Marshal(post.Tags)
 		if err != nil {
-			tx.Rollback()
+			_ = tx.Rollback()
 			return fmt.Errorf("encode tags: %w", err)
 		}
 
@@ -309,15 +310,15 @@ func (ct *databaseCaching) Save() error {
 	// trim last comma and space
 	stmt = stmt[:len(stmt)-2]
 
-	res, err := tx.Exec(stmt, vals...)
+	_, err = tx.Exec(stmt, vals...)
 	if err != nil {
-		tx.Rollback()
+		_ = tx.Rollback()
 		return fmt.Errorf("update posts: %w", err)
 	}
 
-	res, err = tx.Exec(`INSERT OR REPLACE INTO feed_infos VALUES (?, ?, ?, ?, ?)`, ct.uncached.Name(), ct.uncached.URL(), ct.cachedAt, ct.uncached.Description(), "")
+	res, err := tx.Exec(`INSERT OR REPLACE INTO feed_infos VALUES (?, ?, ?, ?, ?)`, ct.uncached.Name(), ct.uncached.URL(), ct.cachedAt, ct.uncached.Description(), "")
 	if err != nil {
-		tx.Rollback()
+		_ = tx.Rollback()
 		return fmt.Errorf("update feed_infos: %w", err)
 	}
 
@@ -339,7 +340,6 @@ func (ct *databaseCaching) Save() error {
 }
 
 type databaseCached struct {
-	cachedAt    time.Time
 	name        string
 	description string
 	url         string

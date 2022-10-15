@@ -44,7 +44,7 @@ func TestFlattenReblogs(t *testing.T) {
 			require.NoError(t, err, "open reblog-test.html")
 			defer f.Close()
 
-			f.Write([]byte(flattened))
+			_, _ = f.Write([]byte(flattened))
 		})
 	}
 }

@@ -20,7 +20,6 @@ var workMatcher = cascadia.MustCompile("li.work")
 var dateMatcher = cascadia.MustCompile(".datetime")
 var titleMatcher = cascadia.MustCompile(".header .heading a")
 var authorMatcher = cascadia.MustCompile(".header .heading a[rel=author]")
-var summaryMatcher = cascadia.MustCompile(".summary")
 var fandomTagsMatcher = cascadia.MustCompile(".fandoms a.tag")
 var requiredTagsMatcher = cascadia.MustCompile(".required-tags li span.text")
 var tagsMatcher = cascadia.MustCompile("ul.tags li .tag")
@@ -158,15 +157,15 @@ func (ao3 *ao3) Next() (*feed.Post, error) {
 	}
 
 	fandomTagNodes := cascadia.QueryAll(work, fandomTagsMatcher)
-	if fandomTagNodes == nil || len(fandomTagNodes) == 0 {
+	if len(fandomTagNodes) == 0 {
 		return nil, fmt.Errorf("no fandom tags")
 	}
 	requiredTagNodes := cascadia.QueryAll(work, requiredTagsMatcher)
-	if requiredTagNodes == nil || len(requiredTagNodes) == 0 {
+	if len(requiredTagNodes) == 0 {
 		return nil, fmt.Errorf("no required tags")
 	}
 	tagNodes := cascadia.QueryAll(work, tagsMatcher)
-	if tagNodes == nil || len(tagNodes) == 0 {
+	if len(tagNodes) == 0 {
 		return nil, fmt.Errorf("no tags")
 	}
 	tags := make([]string, 0, len(fandomTagNodes)+len(requiredTagNodes)+len(tagNodes))
