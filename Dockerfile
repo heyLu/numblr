@@ -1,4 +1,4 @@
-FROM docker.io/golang:1.18-alpine3.15 as builder
+FROM docker.io/golang:1.19-alpine3.16 as builder
 
 # gcc and libc-dev for sqlite, git for vcs listing in /stats page
 RUN apk add --no-cache gcc libc-dev git
