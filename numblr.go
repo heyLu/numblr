@@ -567,6 +567,8 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 				return
 			}
 
+			AddBackgroundFetch()
+			defer DoneBackgroundFetch()
 			feeds[i], openErr = anything.Open(req.Context(), settings.SelectedFeeds[i], cacheFn, search)
 			if openErr != nil {
 				err = fmt.Errorf("%s: %w", settings.SelectedFeeds[i], openErr)
