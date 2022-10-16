@@ -66,7 +66,7 @@ func ListFeedsOlderThan(ctx context.Context, db *sql.DB, olderThan time.Time) ([
 		return nil, fmt.Errorf("begin tx: %w", err)
 	}
 
-	rows, err := tx.Query(`SELECT name FROM feed_infos WHERE ? > cached_at`, olderThan)
+	rows, err := tx.Query(`SELECT name FROM feed_infos WHERE ? > cached_at ORDER BY RANDOM()`, olderThan)
 	if err != nil {
 		_ = tx.Rollback()
 		return nil, fmt.Errorf("select: %w", err)
