@@ -24,6 +24,7 @@ import (
 	"github.com/NYTimes/gziphandler"
 	"github.com/gorilla/mux"
 	lru "github.com/hashicorp/golang-lru"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/yuin/goldmark"
 	"golang.org/x/net/html"
 
@@ -382,8 +383,9 @@ self.addEventListener('install', function(e) {
 		go func() {
 			debug := http.NewServeMux()
 			debug.HandleFunc("/debug/pprof/", pprof.Index)
+			debug.Handle("/metrics", promhttp.Handler())
 			log.Printf("Debug interface listening on on http://%s", config.DebugAddr)
-			log.Fatal(http.ListenAndServe(config.DebugAddr, nil))
+			log.Fatal(http.ListenAndServe(config.DebugAddr, debug))
 		}()
 	}
 
