@@ -23,6 +23,8 @@ type Stats struct {
 	CacheSize int64
 	DBStats   sql.DBStats
 
+	NumBackgroundFetch int
+
 	RecentErrors []string
 	lastError    int
 	seenError    map[string]int
@@ -46,6 +48,24 @@ func EnableStats(numErrors int, numUsers int, numLogs int) {
 	globalStats.seenUser = make(map[string]int, numUsers)
 	globalStats.RecentLogs = make([]string, numLogs)
 	globalStats.seenLog = make(map[string]int, numLogs)
+}
+
+func AddBackgroundFetch() {
+	if globalStats == nil {
+		return
+	}
+	globalStats.mu.Lock()
+	globalStats.NumBackgroundFetch++
+	globalStats.mu.Unlock()
+}
+
+func DoneBackgroundFetch() {
+	if globalStats == nil {
+		return
+	}
+	globalStats.mu.Lock()
+	globalStats.NumBackgroundFetch--
+	globalStats.mu.Unlock()
 }
 
 func EnableDatabaseStats(db *sql.DB, path string) {
@@ -197,6 +217,8 @@ func StatsHandler(w http.ResponseWriter, req *http.Request) {
 	fmt.Fprintf(w, "  idle-closed: %d\n", globalStats.DBStats.MaxIdleTimeClosed)
 	fmt.Fprintf(w, "  max-closed:  %d\n", globalStats.DBStats.MaxIdleClosed)
 	fmt.Fprintf(w, "  old-closed:  %d\n", globalStats.DBStats.MaxLifetimeClosed)
+	fmt.Fprintln(w)
+	fmt.Fprintf(w, "bg fetch: %d\n", globalStats.NumBackgroundFetch)
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "recent errors:")
 	for _, err := range globalStats.RecentErrors {
