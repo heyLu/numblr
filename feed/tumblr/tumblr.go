@@ -30,6 +30,8 @@ func Open(ctx context.Context, name string, _ feed.Search) (feed.Feed, error) {
 	if err != nil {
 		return nil, fmt.Errorf("new request: %w", err)
 	}
+	req.Header.Set("User-Agent", "numblr")
+
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("download %q: %w", name, err)
