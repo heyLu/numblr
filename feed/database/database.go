@@ -169,7 +169,7 @@ func OpenCached(ctx context.Context, db *sql.DB, name string, uncachedFn feed.Op
 	uncachedFeed, err := uncachedFn(ctx, name, search)
 	if err != nil {
 		fallbackCtx := origCtx
-		var cancel func()
+		cancel := func() {}
 		if !search.ForceFresh {
 			// give more time for the second try here
 			fallbackCtx, cancel = context.WithTimeout(origCtx, 500*time.Millisecond)
