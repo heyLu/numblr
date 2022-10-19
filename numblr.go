@@ -546,7 +546,14 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 	var wg sync.WaitGroup
 	wg.Add(len(settings.SelectedFeeds))
 	for i := range settings.SelectedFeeds {
-		go func(i int) {
+		ctx := req.Context()
+		//if !search.ForceFresh {
+		//	var cancel func()
+		//	ctx, cancel = context.WithTimeout(ctx, 300*time.Millisecond)
+		//	defer cancel()
+		//}
+
+		go func(ctx context.Context, i int) {
 			var openErr error
 			defer func() {
 				wg.Done()
@@ -569,11 +576,11 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 
 			AddBackgroundFetch()
 			defer DoneBackgroundFetch()
-			feeds[i], openErr = anything.Open(req.Context(), settings.SelectedFeeds[i], cacheFn, search)
+			feeds[i], openErr = anything.Open(ctx, settings.SelectedFeeds[i], cacheFn, search)
 			if openErr != nil {
 				err = fmt.Errorf("%s: %w", settings.SelectedFeeds[i], openErr)
 			}
-		}(i)
+		}(ctx, i)
 	}
 
 	limit := 25

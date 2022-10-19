@@ -108,6 +108,16 @@ func OpenCached(ctx context.Context, db *sql.DB, name string, uncachedFn feed.Op
 	}
 
 	isCached := err != sql.ErrNoRows
+
+	_, hasTimeout := ctx.Deadline()
+	origCtx := ctx
+	if !search.ForceFresh && !hasTimeout && isCached {
+		var cancel func()
+		// if we have the feed cached and the uncached one took too long, return the cached one
+		ctx, cancel = context.WithTimeout(ctx, 150*time.Millisecond)
+		defer cancel()
+	}
+
 	if !search.ForceFresh && (isCached && time.Since(cachedAt) < CacheTime || feedError != nil && *feedError != "") {
 		notes := []string{"cached"}
 
@@ -156,25 +166,16 @@ func OpenCached(ctx context.Context, db *sql.DB, name string, uncachedFn feed.Op
 
 	}
 
-	_, hasTimeout := ctx.Deadline()
-	timedCtx := ctx
-	if !search.ForceFresh && !hasTimeout && isCached {
-		var cancel func()
-		// if we have the feed cached and the uncached one took too long, return the cached one
-		timedCtx, cancel = context.WithTimeout(ctx, 150*time.Millisecond)
-		defer cancel()
-	}
-
-	uncachedFeed, err := uncachedFn(timedCtx, name, search)
+	uncachedFeed, err := uncachedFn(ctx, name, search)
 	if err != nil {
-		if !search.ForceFresh && isCached && (errors.Is(timedCtx.Err(), context.DeadlineExceeded) || isTimeoutError(err)) {
-			log.Printf("returning out-of-date feed %q, caused by %v / %v", name, timedCtx.Err(), err)
+		if !search.ForceFresh && isCached && (errors.Is(ctx.Err(), context.DeadlineExceeded) || isTimeoutError(err)) {
+			log.Printf("returning out-of-date feed %q, caused by %v / %v", name, ctx.Err(), err)
 			var rows *sql.Rows
 			var err error
 			if search.BeforeID != "" {
-				rows, err = db.QueryContext(ctx, "SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? AND id < ? ORDER BY date DESC LIMIT 20", name, search.BeforeID)
+				rows, err = db.QueryContext(origCtx, "SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? AND id < ? ORDER BY date DESC LIMIT 20", name, search.BeforeID)
 			} else {
-				rows, err = db.QueryContext(ctx, "SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? ORDER BY date DESC LIMIT 20", name)
+				rows, err = db.QueryContext(origCtx, "SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? ORDER BY date DESC LIMIT 20", name)
 			}
 			if err != nil {
 				return nil, fmt.Errorf("querying posts: %w", err)
@@ -183,7 +184,9 @@ func OpenCached(ctx context.Context, db *sql.DB, name string, uncachedFn feed.Op
 			return &databaseCached{name: name, description: description, url: url, outOfDate: true, rows: rows, notes: []string{"timeout"}}, nil
 		}
 
-		_, updateErr := db.Exec(`INSERT OR REPLACE INTO feed_infos VALUES (?, ?, ?, ?, ?)`, name, url, time.Now(), description, err.Error())
+		// TODO: do not store in table if things don't exist ("no such host")
+		// TODO: remove from table if "invalid"?  (difficult to do, don't want to loose valid feeds => check if we have content, let remain if posts exist?)
+		_, updateErr := db.ExecContext(origCtx, `INSERT OR REPLACE INTO feed_infos VALUES (?, ?, ?, ?, ?)`, name, url, time.Now(), description, err.Error())
 		if updateErr != nil {
 			updateErr = fmt.Errorf("update feed_infos after error: %w", updateErr)
 			log.Printf("Error: %s", updateErr)
@@ -194,9 +197,9 @@ func OpenCached(ctx context.Context, db *sql.DB, name string, uncachedFn feed.Op
 			var rows *sql.Rows
 			var err error
 			if search.BeforeID != "" {
-				rows, err = db.QueryContext(ctx, "SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? AND id < ? ORDER BY date DESC LIMIT 20", name, search.BeforeID)
+				rows, err = db.QueryContext(origCtx, "SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? AND id < ? ORDER BY date DESC LIMIT 20", name, search.BeforeID)
 			} else {
-				rows, err = db.QueryContext(ctx, "SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? ORDER BY date DESC LIMIT 20", name)
+				rows, err = db.QueryContext(origCtx, "SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? ORDER BY date DESC LIMIT 20", name)
 			}
 			if err != nil {
 				return nil, fmt.Errorf("querying posts: %w", err)
