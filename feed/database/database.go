@@ -194,7 +194,7 @@ func OpenCached(ctx context.Context, db *sql.DB, name string, uncachedFn feed.Op
 
 		// TODO: do not store in table if things don't exist ("no such host")
 		// TODO: remove from table if "invalid"?  (difficult to do, don't want to loose valid feeds => check if we have content, let remain if posts exist?)
-		_, updateErr := db.ExecContext(origCtx, `INSERT OR REPLACE INTO feed_infos VALUES (?, ?, ?, ?, ?)`, name, url, time.Now(), description, err.Error())
+		_, updateErr := db.ExecContext(fallbackCtx, `INSERT OR REPLACE INTO feed_infos VALUES (?, ?, ?, ?, ?)`, name, url, time.Now(), description, err.Error())
 		if updateErr != nil {
 			updateErr = fmt.Errorf("update feed_infos after error: %w", updateErr)
 			log.Printf("Error: %s", updateErr)
