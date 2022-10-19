@@ -111,11 +111,10 @@ func OpenCached(ctx context.Context, db *sql.DB, name string, uncachedFn feed.Op
 
 	_, hasTimeout := ctx.Deadline()
 	origCtx := ctx
+	cancel := func() {}
 	if !search.ForceFresh && !hasTimeout && isCached {
-		var cancel func()
 		// if we have the feed cached and the uncached one took too long, return the cached one
 		ctx, cancel = context.WithTimeout(ctx, 150*time.Millisecond)
-		defer cancel()
 	}
 
 	if !search.ForceFresh && (isCached && time.Since(cachedAt) < CacheTime || feedError != nil && *feedError != "") {
@@ -147,24 +146,28 @@ func OpenCached(ctx context.Context, db *sql.DB, name string, uncachedFn feed.Op
 			}
 		}
 		if err != nil {
+			cancel()
 			return nil, fmt.Errorf("querying posts: %w", err)
 		}
 
 		if feedError != nil && *feedError != "" {
 			notes = []string{fmt.Sprintf("cached-by-error: %s", *feedError)}
 		}
-		return &databaseCached{name: name, description: description, url: url, rows: rows, notes: notes}, nil
+		return &databaseCached{name: name, description: description, url: url, rows: rows, cancel: cancel, notes: notes}, nil
 	}
 
 	if name == "random" {
 		rows, err := db.QueryContext(ctx, "SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author IN (SELECT name FROM feed_infos ORDER BY RANDOM() LIMIT 20) GROUP BY author ORDER BY RANDOM() LIMIT 20", name)
 		if err != nil {
+			cancel()
 			return nil, fmt.Errorf("querying posts: %w", err)
 		}
 
-		return &databaseCached{name: name, description: description, url: url, rows: rows}, nil
+		return &databaseCached{name: name, description: description, url: url, rows: rows, cancel: cancel}, nil
 
 	}
+
+	cancel()
 
 	uncachedFeed, err := uncachedFn(ctx, name, search)
 	if err != nil {
