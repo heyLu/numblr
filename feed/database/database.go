@@ -168,20 +168,28 @@ func OpenCached(ctx context.Context, db *sql.DB, name string, uncachedFn feed.Op
 
 	uncachedFeed, err := uncachedFn(ctx, name, search)
 	if err != nil {
+		fallbackCtx := origCtx
+		var cancel func()
+		if !search.ForceFresh {
+			// give more time for the second try here
+			fallbackCtx, cancel = context.WithTimeout(origCtx, 500*time.Millisecond)
+		}
+
 		if !search.ForceFresh && isCached && (errors.Is(ctx.Err(), context.DeadlineExceeded) || isTimeoutError(err)) {
 			log.Printf("returning out-of-date feed %q, caused by %v / %v", name, ctx.Err(), err)
 			var rows *sql.Rows
 			var err error
 			if search.BeforeID != "" {
-				rows, err = db.QueryContext(origCtx, "SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? AND id < ? ORDER BY date DESC LIMIT 20", name, search.BeforeID)
+				rows, err = db.QueryContext(fallbackCtx, "SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? AND id < ? ORDER BY date DESC LIMIT 20", name, search.BeforeID)
 			} else {
-				rows, err = db.QueryContext(origCtx, "SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? ORDER BY date DESC LIMIT 20", name)
+				rows, err = db.QueryContext(fallbackCtx, "SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? ORDER BY date DESC LIMIT 20", name)
 			}
 			if err != nil {
+				cancel()
 				return nil, fmt.Errorf("querying posts: %w", err)
 			}
 
-			return &databaseCached{name: name, description: description, url: url, outOfDate: true, rows: rows, notes: []string{"timeout"}}, nil
+			return &databaseCached{name: name, description: description, url: url, outOfDate: true, rows: rows, cancel: cancel, notes: []string{"timeout"}}, nil
 		}
 
 		// TODO: do not store in table if things don't exist ("no such host")
@@ -197,17 +205,19 @@ func OpenCached(ctx context.Context, db *sql.DB, name string, uncachedFn feed.Op
 			var rows *sql.Rows
 			var err error
 			if search.BeforeID != "" {
-				rows, err = db.QueryContext(origCtx, "SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? AND id < ? ORDER BY date DESC LIMIT 20", name, search.BeforeID)
+				rows, err = db.QueryContext(fallbackCtx, "SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? AND id < ? ORDER BY date DESC LIMIT 20", name, search.BeforeID)
 			} else {
-				rows, err = db.QueryContext(origCtx, "SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? ORDER BY date DESC LIMIT 20", name)
+				rows, err = db.QueryContext(fallbackCtx, "SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? ORDER BY date DESC LIMIT 20", name)
 			}
 			if err != nil {
+				cancel()
 				return nil, fmt.Errorf("querying posts: %w", err)
 			}
 
-			return &databaseCached{name: name, description: description, url: url, outOfDate: true, rows: rows, notes: []string{"not-found"}}, nil
+			return &databaseCached{name: name, description: description, url: url, outOfDate: true, rows: rows, cancel: cancel, notes: []string{"not-found"}}, nil
 		}
 
+		cancel()
 		return nil, fmt.Errorf("open uncached: %w", err)
 	}
 
@@ -349,6 +359,7 @@ type databaseCached struct {
 	outOfDate   bool
 	notes       []string
 	rows        *sql.Rows
+	cancel      func()
 	lastPost    *feed.Post
 }
 
@@ -401,5 +412,8 @@ func (dc *databaseCached) Next() (*feed.Post, error) {
 }
 
 func (dc *databaseCached) Close() error {
+	if dc.cancel != nil {
+		dc.cancel()
+	}
 	return dc.rows.Close()
 }
