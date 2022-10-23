@@ -102,7 +102,7 @@ func OpenCached(ctx context.Context, db *sql.DB, name string, uncachedFn feed.Op
 	}
 
 	// cleanup only if tx/rows/context is not used later
-	needsCleanup := true
+	needsCleanupNow := true
 	emptyCancel := func() {}
 	cancel := &emptyCancel // must be a pointer so we can overwrite it later and `cleanup` knows
 	cleanup := func() {
@@ -110,7 +110,7 @@ func OpenCached(ctx context.Context, db *sql.DB, name string, uncachedFn feed.Op
 		tx.Commit()
 	}
 	defer func() {
-		if needsCleanup {
+		if needsCleanupNow {
 			cleanup()
 		}
 	}()
@@ -173,7 +173,7 @@ func OpenCached(ctx context.Context, db *sql.DB, name string, uncachedFn feed.Op
 		if feedError != nil && *feedError != "" {
 			notes = []string{fmt.Sprintf("cached-by-error: %s", *feedError)}
 		}
-		needsCleanup = false
+		needsCleanupNow = false
 		return &databaseCached{name: name, description: description, url: url, rows: rows, cancel: cleanup, notes: notes}, nil
 	}
 
@@ -184,7 +184,7 @@ func OpenCached(ctx context.Context, db *sql.DB, name string, uncachedFn feed.Op
 			return nil, fmt.Errorf("querying posts: %w", err)
 		}
 
-		needsCleanup = false
+		needsCleanupNow = false
 		return &databaseCached{name: name, description: description, url: url, rows: rows, cancel: cleanup}, nil
 
 	}
@@ -216,7 +216,7 @@ func OpenCached(ctx context.Context, db *sql.DB, name string, uncachedFn feed.Op
 				return nil, fmt.Errorf("querying posts: %w", err)
 			}
 
-			needsCleanup = false
+			needsCleanupNow = false
 			return &databaseCached{name: name, description: description, url: url, outOfDate: true, rows: rows, cancel: cleanup, notes: []string{"timeout"}}, nil
 		}
 
@@ -250,7 +250,7 @@ func OpenCached(ctx context.Context, db *sql.DB, name string, uncachedFn feed.Op
 				return nil, fmt.Errorf("querying posts: %w", err)
 			}
 
-			needsCleanup = false
+			needsCleanupNow = false
 			return &databaseCached{name: name, description: description, url: url, outOfDate: true, rows: rows, cancel: cleanup, notes: []string{"not-found"}}, nil
 		}
 
