@@ -103,9 +103,10 @@ func OpenCached(ctx context.Context, db *sql.DB, name string, uncachedFn feed.Op
 
 	// cleanup only if tx/rows/context is not used later
 	needsCleanup := true
-	cancel := func() {}
+	emptyCancel := func() {}
+	cancel := &emptyCancel // must be a pointer so we can overwrite it later and `cleanup` knows
 	cleanup := func() {
-		cancel()
+		(*cancel)()
 		tx.Commit()
 	}
 	defer func() {
@@ -132,7 +133,7 @@ func OpenCached(ctx context.Context, db *sql.DB, name string, uncachedFn feed.Op
 	origCtx := ctx
 	if !search.ForceFresh && !hasTimeout && isCached {
 		// if we have the feed cached and the uncached one took too long, return the cached one
-		ctx, cancel = context.WithTimeout(ctx, 150*time.Millisecond)
+		ctx, *cancel = context.WithTimeout(ctx, 150*time.Millisecond)
 	}
 
 	if !search.ForceFresh && (isCached && time.Since(cachedAt) < CacheTime || feedError != nil && *feedError != "") {
@@ -189,16 +190,17 @@ func OpenCached(ctx context.Context, db *sql.DB, name string, uncachedFn feed.Op
 	}
 
 	// cancel first timeout
-	cancel()
+	(*cancel)()
 
 	var uncachedFeed feed.Feed
 	uncachedFeed, err = uncachedFn(ctx, name, search)
+
 	if err != nil {
 		fallbackCtx := origCtx
-		cancel = func() {}
+		cancel = &emptyCancel
 		if !search.ForceFresh {
 			// give more time for the second try here
-			fallbackCtx, cancel = context.WithTimeout(origCtx, 500*time.Millisecond)
+			fallbackCtx, *cancel = context.WithTimeout(origCtx, 500*time.Millisecond)
 		}
 
 		if !search.ForceFresh && isCached && (errors.Is(ctx.Err(), context.DeadlineExceeded) || isTimeoutError(err)) {
