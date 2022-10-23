@@ -96,83 +96,106 @@ func ListFeedsOlderThan(ctx context.Context, db *sql.DB, olderThan time.Time) ([
 // OpenCached returns a feed that is either already cached or one that will
 // cache the uncached in the database one as it is iterated through.
 func OpenCached(ctx context.Context, db *sql.DB, name string, uncachedFn feed.Open, search feed.Search) (feed.Feed, error) {
+	tx, err := db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return nil, fmt.Errorf("begin tx: %w", err)
+	}
+
+	// cleanup only if tx/rows/context is not used later
+	needsCleanup := true
+	cancel := func() {}
+	cleanup := func() {
+		cancel()
+		tx.Commit()
+	}
+	defer func() {
+		if needsCleanup {
+			cleanup()
+		}
+	}()
+
 	// FIXME: cache non-canonical names correctly (e.g. oops@tumblr should be looked up as `oops`)
-	row := db.QueryRowContext(ctx, "SELECT cached_at, url, description, error FROM feed_infos WHERE name = ?", name)
+	row := tx.QueryRowContext(ctx, "SELECT cached_at, url, description, error FROM feed_infos WHERE name = ?", name)
 	var cachedAt time.Time
 	var url string
 	var description string
 	var feedError *string
-	err := row.Scan(&cachedAt, &url, &description, &feedError)
+	err = row.Scan(&cachedAt, &url, &description, &feedError)
 	if err != nil && err != sql.ErrNoRows {
+		tx.Commit()
 		return nil, fmt.Errorf("looking up feed: %w", err)
 	}
 
 	isCached := err != sql.ErrNoRows
-
 	_, hasTimeout := ctx.Deadline()
+
 	origCtx := ctx
-	cancel := func() {}
 	if !search.ForceFresh && !hasTimeout && isCached {
 		// if we have the feed cached and the uncached one took too long, return the cached one
 		ctx, cancel = context.WithTimeout(ctx, 150*time.Millisecond)
 	}
 
 	if !search.ForceFresh && (isCached && time.Since(cachedAt) < CacheTime || feedError != nil && *feedError != "") {
+		log.Println(name, "querying")
+
 		notes := []string{"cached"}
 
 		var rows *sql.Rows
 		if search.BeforeID != "" {
 			if search.NoReblogs {
 				notes = append(notes, "noreblogs")
-				rows, err = db.QueryContext(ctx, `SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? AND id < ? AND description_html NOT LIKE '%class="tumblr_blog"%' ORDER BY id DESC LIMIT 20`, name, search.BeforeID)
+				rows, err = tx.QueryContext(ctx, `SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? AND id < ? AND description_html NOT LIKE '%class="tumblr_blog"%' ORDER BY id DESC LIMIT 20`, name, search.BeforeID)
 			} else {
-				rows, err = db.QueryContext(ctx, "SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? AND date < (SELECT date FROM posts WHERE author = ? AND  id < ? ORDER BY id DESC) AND id < ? ORDER BY date DESC LIMIT 20", name, name, search.BeforeID, search.BeforeID)
+				rows, err = tx.QueryContext(ctx, "SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? AND date < (SELECT date FROM posts WHERE author = ? AND  id < ? ORDER BY id DESC) AND id < ? ORDER BY date DESC LIMIT 20", name, name, search.BeforeID, search.BeforeID)
 			}
 		} else if len(search.Terms) > 0 {
 			notes = append(notes, "search")
 
 			match := "%" + search.Terms[0] + "%"
-			rows, err = db.QueryContext(ctx, "SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? AND (title LIKE ? OR description_html LIKE ? OR tags LIKE ?) ORDER BY date DESC LIMIT 20", name, match, match, match)
+			rows, err = tx.QueryContext(ctx, "SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? AND (title LIKE ? OR description_html LIKE ? OR tags LIKE ?) ORDER BY date DESC LIMIT 20", name, match, match, match)
 		} else if len(search.Tags) > 0 {
 			notes = append(notes, "tags")
 			// TODO: support filtering for multiple tags at once
-			rows, err = db.QueryContext(ctx, "SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? AND (tags LIKE ?) ORDER BY date DESC LIMIT 20", name, "%"+search.Tags[0]+"%")
+			rows, err = tx.QueryContext(ctx, "SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? AND (tags LIKE ?) ORDER BY date DESC LIMIT 20", name, "%"+search.Tags[0]+"%")
 		} else {
 			if search.NoReblogs {
 				notes = append(notes, "noreblogs")
-				rows, err = db.QueryContext(ctx, `SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? AND description_html NOT LIKE '%class="tumblr_blog"%' ORDER BY date DESC LIMIT 20`, name)
+				rows, err = tx.QueryContext(ctx, `SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? AND description_html NOT LIKE '%class="tumblr_blog"%' ORDER BY date DESC LIMIT 20`, name)
 			} else {
-				rows, err = db.QueryContext(ctx, "SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? ORDER BY date DESC LIMIT 20", name)
+				rows, err = tx.QueryContext(ctx, "SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? ORDER BY date DESC LIMIT 20", name)
 			}
 		}
 		if err != nil {
-			cancel()
 			return nil, fmt.Errorf("querying posts: %w", err)
 		}
 
 		if feedError != nil && *feedError != "" {
 			notes = []string{fmt.Sprintf("cached-by-error: %s", *feedError)}
 		}
-		return &databaseCached{name: name, description: description, url: url, rows: rows, cancel: cancel, notes: notes}, nil
+		needsCleanup = false
+		return &databaseCached{name: name, description: description, url: url, rows: rows, cancel: cleanup, notes: notes}, nil
 	}
 
 	if name == "random" {
-		rows, err := db.QueryContext(ctx, "SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author IN (SELECT name FROM feed_infos ORDER BY RANDOM() LIMIT 20) GROUP BY author ORDER BY RANDOM() LIMIT 20", name)
+		var rows *sql.Rows
+		rows, err = tx.QueryContext(ctx, "SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author IN (SELECT name FROM feed_infos ORDER BY RANDOM() LIMIT 20) GROUP BY author ORDER BY RANDOM() LIMIT 20", name)
 		if err != nil {
-			cancel()
 			return nil, fmt.Errorf("querying posts: %w", err)
 		}
 
-		return &databaseCached{name: name, description: description, url: url, rows: rows, cancel: cancel}, nil
+		needsCleanup = false
+		return &databaseCached{name: name, description: description, url: url, rows: rows, cancel: cleanup}, nil
 
 	}
 
+	// cancel first timeout
 	cancel()
 
-	uncachedFeed, err := uncachedFn(ctx, name, search)
+	var uncachedFeed feed.Feed
+	uncachedFeed, err = uncachedFn(ctx, name, search)
 	if err != nil {
 		fallbackCtx := origCtx
-		cancel := func() {}
+		cancel = func() {}
 		if !search.ForceFresh {
 			// give more time for the second try here
 			fallbackCtx, cancel = context.WithTimeout(origCtx, 500*time.Millisecond)
@@ -183,24 +206,33 @@ func OpenCached(ctx context.Context, db *sql.DB, name string, uncachedFn feed.Op
 			var rows *sql.Rows
 			var err error
 			if search.BeforeID != "" {
-				rows, err = db.QueryContext(fallbackCtx, "SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? AND id < ? ORDER BY date DESC LIMIT 20", name, search.BeforeID)
+				rows, err = tx.QueryContext(fallbackCtx, "SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? AND id < ? ORDER BY date DESC LIMIT 20", name, search.BeforeID)
 			} else {
-				rows, err = db.QueryContext(fallbackCtx, "SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? ORDER BY date DESC LIMIT 20", name)
+				rows, err = tx.QueryContext(fallbackCtx, "SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? ORDER BY date DESC LIMIT 20", name)
 			}
 			if err != nil {
-				cancel()
 				return nil, fmt.Errorf("querying posts: %w", err)
 			}
 
-			return &databaseCached{name: name, description: description, url: url, outOfDate: true, rows: rows, cancel: cancel, notes: []string{"timeout"}}, nil
+			needsCleanup = false
+			return &databaseCached{name: name, description: description, url: url, outOfDate: true, rows: rows, cancel: cleanup, notes: []string{"timeout"}}, nil
 		}
 
+		var updateTx *sql.Tx
+		updateTx, updateErr := db.BeginTx(fallbackCtx, &sql.TxOptions{ReadOnly: false})
+		if updateErr != nil {
+			return nil, fmt.Errorf("could not open update tx: %w", updateErr)
+		}
 		// TODO: do not store in table if things don't exist ("no such host")
 		// TODO: remove from table if "invalid"?  (difficult to do, don't want to loose valid feeds => check if we have content, let remain if posts exist?)
-		_, updateErr := db.ExecContext(fallbackCtx, `INSERT OR REPLACE INTO feed_infos VALUES (?, ?, ?, ?, ?)`, name, url, time.Now(), description, err.Error())
+		_, updateErr = updateTx.ExecContext(fallbackCtx, `INSERT OR REPLACE INTO feed_infos VALUES (?, ?, ?, ?, ?)`, name, url, time.Now(), description, err.Error())
 		if updateErr != nil {
 			updateErr = fmt.Errorf("update feed_infos after error: %w", updateErr)
 			log.Printf("Error: %s", updateErr)
+		}
+		updateErr = updateTx.Commit()
+		if updateErr != nil {
+			log.Printf("Error: committing update tx: %s", err)
 		}
 
 		var statusErr feed.StatusError
@@ -208,19 +240,18 @@ func OpenCached(ctx context.Context, db *sql.DB, name string, uncachedFn feed.Op
 			var rows *sql.Rows
 			var err error
 			if search.BeforeID != "" {
-				rows, err = db.QueryContext(fallbackCtx, "SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? AND id < ? ORDER BY date DESC LIMIT 20", name, search.BeforeID)
+				rows, err = tx.QueryContext(fallbackCtx, "SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? AND id < ? ORDER BY date DESC LIMIT 20", name, search.BeforeID)
 			} else {
-				rows, err = db.QueryContext(fallbackCtx, "SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? ORDER BY date DESC LIMIT 20", name)
+				rows, err = tx.QueryContext(fallbackCtx, "SELECT source, id, author, avatar_url, url, title, description_html, tags, date_string, date FROM posts WHERE author = ? ORDER BY date DESC LIMIT 20", name)
 			}
 			if err != nil {
-				cancel()
 				return nil, fmt.Errorf("querying posts: %w", err)
 			}
 
-			return &databaseCached{name: name, description: description, url: url, outOfDate: true, rows: rows, cancel: cancel, notes: []string{"not-found"}}, nil
+			needsCleanup = false
+			return &databaseCached{name: name, description: description, url: url, outOfDate: true, rows: rows, cancel: cleanup, notes: []string{"not-found"}}, nil
 		}
 
-		cancel()
 		return nil, fmt.Errorf("open uncached: %w", err)
 	}
 
