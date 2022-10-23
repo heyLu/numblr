@@ -168,7 +168,6 @@ func (tr *tumblrRSS) Next() (*feed.Post, error) {
 }
 
 func (tr *tumblrRSS) Close() error {
-	log.Printf("closing %q", tr.name)
 	tr.closed = true
 	return tr.r.Close()
 }
