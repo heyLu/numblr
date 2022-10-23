@@ -219,22 +219,31 @@ func OpenCached(ctx context.Context, db *sql.DB, name string, uncachedFn feed.Op
 			return &databaseCached{name: name, description: description, url: url, outOfDate: true, rows: rows, cancel: cleanup, notes: []string{"timeout"}}, nil
 		}
 
-		var updateTx *sql.Tx
-		updateTx, updateErr := db.BeginTx(fallbackCtx, &sql.TxOptions{ReadOnly: false})
-		if updateErr != nil {
-			return nil, fmt.Errorf("could not open update tx: %w", updateErr)
-		}
-		// TODO: do not store in table if things don't exist ("no such host")
-		// TODO: remove from table if "invalid"?  (difficult to do, don't want to loose valid feeds => check if we have content, let remain if posts exist?)
-		_, updateErr = updateTx.ExecContext(fallbackCtx, `INSERT OR REPLACE INTO feed_infos VALUES (?, ?, ?, ?, ?)`, name, url, time.Now(), description, err.Error())
-		if updateErr != nil {
-			updateErr = fmt.Errorf("update feed_infos after error: %w", updateErr)
-			log.Printf("Error: %s", updateErr)
-		}
-		updateErr = updateTx.Commit()
-		if updateErr != nil {
-			log.Printf("Error: committing update tx: %s", err)
-		}
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+			defer cancel()
+
+			var updateTx *sql.Tx
+			updateTx, updateErr := db.BeginTx(ctx, &sql.TxOptions{ReadOnly: false})
+			if updateErr != nil {
+				log.Printf("Error: could not open update tx: %s", updateErr)
+				return
+			}
+
+			// TODO: do not store in table if things don't exist ("no such host")
+			// TODO: remove from table if "invalid"?  (difficult to do, don't want to loose valid feeds => check if we have content, let remain if posts exist?)
+			_, updateErr = updateTx.ExecContext(ctx, `INSERT OR REPLACE INTO feed_infos VALUES (?, ?, ?, ?, ?)`, name, url, time.Now(), description, err.Error())
+			if updateErr != nil {
+				updateErr = fmt.Errorf("update feed_infos after error: %w", updateErr)
+				log.Printf("Error: %s", updateErr)
+				return
+			}
+
+			updateErr = updateTx.Commit()
+			if updateErr != nil {
+				log.Printf("Error: committing update tx: %s", updateErr)
+			}
+		}()
 
 		var statusErr feed.StatusError
 		if ok := errors.As(err, &statusErr); ok && statusErr.Code == http.StatusNotFound {
