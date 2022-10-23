@@ -189,11 +189,11 @@ func OpenCached(ctx context.Context, db *sql.DB, name string, uncachedFn feed.Op
 
 	}
 
-	// cancel first timeout
-	(*cancel)()
-
 	var uncachedFeed feed.Feed
 	uncachedFeed, err = uncachedFn(ctx, name, search)
+
+	// cancel first timeout
+	(*cancel)()
 
 	if err != nil {
 		fallbackCtx := origCtx
