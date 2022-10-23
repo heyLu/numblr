@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mattn/go-sqlite3"
 	_ "github.com/mattn/go-sqlite3" // use sqlite3 for this feed
 
 	"github.com/heyLu/numblr/feed"
@@ -137,8 +138,6 @@ func OpenCached(ctx context.Context, db *sql.DB, name string, uncachedFn feed.Op
 	}
 
 	if !search.ForceFresh && (isCached && time.Since(cachedAt) < CacheTime || feedError != nil && *feedError != "") {
-		log.Println(name, "querying")
-
 		notes := []string{"cached"}
 
 		var rows *sql.Rows
@@ -315,7 +314,7 @@ func (ct *databaseCaching) Close() error {
 	err := ct.Save()
 	if err != nil {
 		closeErr := ct.uncached.Close()
-		return fmt.Errorf("saving: %w (closing: %s)", err, closeErr)
+		return fmt.Errorf("saving: %w (closing: %v)", err, closeErr)
 	}
 	return ct.uncached.Close()
 }
@@ -371,9 +370,24 @@ func (ct *databaseCaching) Save() error {
 		return fmt.Errorf("update feed_infos: %w", err)
 	}
 
-	err = tx.Commit()
+	var i int
+	for i = 0; i < 3; i++ {
+		err = tx.Commit()
+		// retry if busy ("database is locked")
+		//
+		// > An attempt to execute COMMIT might also result in an SQLITE_BUSY return code if an another thread or process has an open read connection. When COMMIT fails in this way, the transaction remains active and the COMMIT can be retried later after the reader has had a chance to clear.
+		//
+		// See https://www.sqlite.org/lang_transaction.html#implicit_versus_explicit_transactions.
+		if err != nil && errors.Is(err, &sqlite3.ErrBusy) {
+			time.Sleep(100 * time.Millisecond)
+			continue
+		}
+
+		// either no error, or error other than ErrBusy, let's return!
+		break
+	}
 	if err != nil {
-		return fmt.Errorf("commit: %w", err)
+		return fmt.Errorf("commit: %w (try #%d)", err, i+1)
 	}
 
 	count, err := res.RowsAffected()
