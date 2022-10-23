@@ -98,7 +98,7 @@ func Open(ctx context.Context, name string, _ feed.Search) (feed.Feed, error) {
 	}
 
 	tmblr := &tumblrRSS{name: name, description: description, r: io.NopCloser(buf), dec: dec, dateFormat: TumblrDate}
-	defer func() {
+	go func() {
 		time.Sleep(15 * time.Second)
 		if !tmblr.closed {
 			log.Printf("feed was not closed! %#v", tmblr)
