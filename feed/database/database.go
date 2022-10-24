@@ -91,7 +91,7 @@ func ListFeedsOlderThan(ctx context.Context, db *sql.DB, olderThan time.Time) ([
 		return nil, fmt.Errorf("after scan: %w", rows.Err())
 	}
 
-	return feeds, tx.Commit()
+	return feeds, tx.Rollback()
 }
 
 // OpenCached returns a feed that is either already cached or one that will
@@ -108,7 +108,7 @@ func OpenCached(ctx context.Context, db *sql.DB, name string, uncachedFn feed.Op
 	cancel := &emptyCancel // must be a pointer so we can overwrite it later and `cleanup` knows
 	cleanup := func() {
 		(*cancel)()
-		tx.Commit()
+		tx.Rollback()
 	}
 	defer func() {
 		if needsCleanupNow {
@@ -124,7 +124,6 @@ func OpenCached(ctx context.Context, db *sql.DB, name string, uncachedFn feed.Op
 	var feedError *string
 	err = row.Scan(&cachedAt, &url, &description, &feedError)
 	if err != nil && err != sql.ErrNoRows {
-		tx.Commit()
 		return nil, fmt.Errorf("looking up feed: %w", err)
 	}
 
