@@ -78,7 +78,9 @@ func ListFeedsOlderThan(ctx context.Context, db *sql.DB, olderThan time.Time) ([
 	if err != nil {
 		return nil, fmt.Errorf("begin tx: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() {
+		_ = tx.Rollback()
+	}()
 
 	rows, err := tx.Query(`SELECT name FROM feed_infos WHERE ? > cached_at ORDER BY RANDOM()`, olderThan)
 	if err != nil {
@@ -118,7 +120,7 @@ func OpenCached(ctx context.Context, db *sql.DB, name string, uncachedFn feed.Op
 	cancel := &emptyCancel // must be a pointer so we can overwrite it later and `cleanup` knows
 	cleanup := func() {
 		(*cancel)()
-		tx.Rollback()
+		_ = tx.Rollback()
 	}
 	defer func() {
 		if needsCleanupNow {
@@ -243,7 +245,9 @@ func OpenCached(ctx context.Context, db *sql.DB, name string, uncachedFn feed.Op
 				log.Printf("Error: could not open update tx: %s", updateErr)
 				return
 			}
-			defer updateTx.Rollback()
+			defer func() {
+				_ = updateTx.Rollback()
+			}()
 
 			// TODO: do not store in table if things don't exist ("no such host")
 			// TODO: remove from table if "invalid"?  (difficult to do, don't want to loose valid feeds => check if we have content, let remain if posts exist?)
@@ -352,7 +356,9 @@ func (ct *databaseCaching) Save() error {
 	if err != nil {
 		return fmt.Errorf("begin tx: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() {
+		_ = tx.Rollback()
+	}()
 
 	stmt := `INSERT OR REPLACE INTO posts VALUES `
 	vals := make([]interface{}, 0, len(ct.posts)*10)
