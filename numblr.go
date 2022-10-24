@@ -400,8 +400,8 @@ self.addEventListener('install', function(e) {
 
 	go func() {
 		<-ctx.Done()
-		log.Printf("closing db")
-		db.Close()
+		err := db.Close()
+		log.Printf("closing db: %v", err)
 		os.Exit(0)
 	}()
 
