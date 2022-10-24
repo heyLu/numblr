@@ -66,10 +66,10 @@ func ListFeedsOlderThan(ctx context.Context, db *sql.DB, olderThan time.Time) ([
 	if err != nil {
 		return nil, fmt.Errorf("begin tx: %w", err)
 	}
+	defer tx.Rollback()
 
 	rows, err := tx.Query(`SELECT name FROM feed_infos WHERE ? > cached_at ORDER BY RANDOM()`, olderThan)
 	if err != nil {
-		_ = tx.Rollback()
 		return nil, fmt.Errorf("select: %w", err)
 	}
 	defer rows.Close()
@@ -79,7 +79,6 @@ func ListFeedsOlderThan(ctx context.Context, db *sql.DB, olderThan time.Time) ([
 		var feed string
 		err := rows.Scan(&feed)
 		if err != nil {
-			_ = tx.Rollback()
 			return nil, fmt.Errorf("scan: %w", err)
 		}
 
@@ -87,11 +86,10 @@ func ListFeedsOlderThan(ctx context.Context, db *sql.DB, olderThan time.Time) ([
 	}
 
 	if rows.Err() != nil {
-		_ = tx.Rollback()
 		return nil, fmt.Errorf("after scan: %w", rows.Err())
 	}
 
-	return feeds, tx.Rollback()
+	return feeds, nil
 }
 
 // OpenCached returns a feed that is either already cached or one that will
