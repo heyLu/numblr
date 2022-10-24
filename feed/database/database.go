@@ -228,6 +228,7 @@ func OpenCached(ctx context.Context, db *sql.DB, name string, uncachedFn feed.Op
 				log.Printf("Error: could not open update tx: %s", updateErr)
 				return
 			}
+			defer updateTx.Rollback()
 
 			// TODO: do not store in table if things don't exist ("no such host")
 			// TODO: remove from table if "invalid"?  (difficult to do, don't want to loose valid feeds => check if we have content, let remain if posts exist?)
@@ -336,6 +337,7 @@ func (ct *databaseCaching) Save() error {
 	if err != nil {
 		return fmt.Errorf("begin tx: %w", err)
 	}
+	defer tx.Rollback()
 
 	stmt := `INSERT OR REPLACE INTO posts VALUES `
 	vals := make([]interface{}, 0, len(ct.posts)*10)
@@ -345,17 +347,14 @@ func (ct *databaseCaching) Save() error {
 		// 	TEXT, description_html TEXT, tags TEXT, date_string TEXT, date TIME, PRIMARY KEY (name, id))`)
 
 		if post.ID == "" {
-			_ = tx.Rollback()
 			return fmt.Errorf("empty post id: %#v", post)
 		}
 		if post.Source == "" {
-			_ = tx.Rollback()
 			return fmt.Errorf("empty post source: %#v", post)
 		}
 
 		tagsJSON, err := json.Marshal(post.Tags)
 		if err != nil {
-			_ = tx.Rollback()
 			return fmt.Errorf("encode tags: %w", err)
 		}
 
@@ -368,13 +367,11 @@ func (ct *databaseCaching) Save() error {
 
 	_, err = tx.Exec(stmt, vals...)
 	if err != nil {
-		_ = tx.Rollback()
 		return fmt.Errorf("update posts: %w", err)
 	}
 
 	res, err := tx.Exec(`INSERT OR REPLACE INTO feed_infos VALUES (?, ?, ?, ?, ?)`, ct.uncached.Name(), ct.uncached.URL(), ct.cachedAt, ct.uncached.Description(), "")
 	if err != nil {
-		_ = tx.Rollback()
 		return fmt.Errorf("update feed_infos: %w", err)
 	}
 
