@@ -222,6 +222,11 @@ func OpenCached(ctx context.Context, db *sql.DB, name string, uncachedFn feed.Op
 			ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 			defer cancel()
 
+			// feed does not exist, ignore
+			if !isCached && strings.Contains(err.Error(), "no such host") {
+				return
+			}
+
 			var updateTx *sql.Tx
 			updateTx, updateErr := db.BeginTx(ctx, &sql.TxOptions{ReadOnly: false})
 			if updateErr != nil {
