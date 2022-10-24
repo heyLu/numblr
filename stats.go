@@ -17,11 +17,12 @@ type Stats struct {
 	// mu protects all fields.
 	mu sync.Mutex
 
-	NumViews  int
-	NumFeeds  int
-	NumPosts  int
-	CacheSize int64
-	DBStats   sql.DBStats
+	NumViews     int
+	NumFeeds     int
+	NumPosts     int
+	CacheSize    int64
+	CacheWALSize int64
+	DBStats      sql.DBStats
 
 	NumBackgroundFetch int
 
@@ -80,6 +81,12 @@ func EnableDatabaseStats(db *sql.DB, path string) {
 					return err
 				}
 				globalStats.CacheSize = fi.Size()
+
+				fi, err = os.Lstat(path + "-wal")
+				if err != nil {
+					return err
+				}
+				globalStats.CacheWALSize = fi.Size()
 
 				globalStats.DBStats = db.Stats()
 
@@ -204,7 +211,7 @@ func StatsHandler(w http.ResponseWriter, req *http.Request) {
 
 	fmt.Fprintf(w, "feeds: %d\n", globalStats.NumFeeds)
 	fmt.Fprintf(w, "posts: %d\n", globalStats.NumPosts)
-	fmt.Fprintf(w, "cache: %s\n", Bytes(globalStats.CacheSize))
+	fmt.Fprintf(w, "cache: %s (%s)\n", Bytes(globalStats.CacheSize), Bytes(globalStats.CacheWALSize))
 	fmt.Fprintf(w, "views: %d\n", globalStats.NumViews)
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "db:")
