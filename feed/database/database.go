@@ -27,13 +27,25 @@ func InitDatabase(dbPath string) (*sql.DB, error) {
 	if dbPath == "" {
 		dbPath = "file::memory:?mode=memory&cache=shared"
 	} else if !strings.HasPrefix(dbPath, "file:") {
-		dbPath = "file:" + dbPath + "?_journal_mode=WAL&_busy_timeout=50"
+		dbPath = "file:" + dbPath + "?_journal_mode=WAL&_busy_timeout=100&_auto_vacuum=incremental"
 	}
 
 	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
 		return nil, fmt.Errorf("open: %w", err)
 	}
+
+	go func() {
+		for {
+			time.Sleep(1 * time.Minute)
+
+			_, err := db.ExecContext(context.Background(), "PRAGMA incremental_vaccuum(100)")
+			if err != nil {
+				log.Printf("Error: incremental vacuum failed: %s", err)
+				continue
+			}
+		}
+	}()
 
 	db.SetConnMaxLifetime(60 * time.Minute)
 	db.SetMaxIdleConns(100)
