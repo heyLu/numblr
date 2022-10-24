@@ -13,12 +13,14 @@ import (
 	"net/http/pprof"
 	"net/url"
 	"os"
+	"os/signal"
 	"path"
 	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/NYTimes/gziphandler"
@@ -392,6 +394,16 @@ self.addEventListener('install', function(e) {
 			log.Fatal(http.ListenAndServe(config.DebugAddr, debug))
 		}()
 	}
+
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+
+	go func() {
+		<-ctx.Done()
+		log.Printf("closing db")
+		db.Close()
+		os.Exit(0)
+	}()
 
 	log.Printf("Listening on http://%s", config.Addr)
 	log.Fatal(http.ListenAndServe(config.Addr, router))
