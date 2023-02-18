@@ -47,6 +47,18 @@ func InitDatabase(dbPath string) (*sql.DB, error) {
 		}
 	}()
 
+	go func() {
+		for {
+			time.Sleep(10 * time.Minute)
+
+			_, err := db.ExecContext(context.Background(), "PRAGMA wal_checkpoint(restart)")
+			if err != nil {
+				log.Printf("Error: wal checkpoint failed: %s", err)
+				continue
+			}
+		}
+	}()
+
 	db.SetConnMaxLifetime(60 * time.Minute)
 	db.SetMaxIdleConns(100)
 
