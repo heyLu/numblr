@@ -595,7 +595,7 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 		}(ctx, i)
 	}
 
-	limit := 25
+	limit := 20
 	limitParam := req.URL.Query().Get("limit")
 	if limitParam != "" {
 		l, err := strconv.Atoi(limitParam)
@@ -684,8 +684,6 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 	var lastPost *feed.Post
 	var nextPost func()
 	nextPost = func() {
-		lastPost = post
-
 		start := time.Now()
 		post, err = mergedFeeds.Next()
 		dur := time.Since(start)
@@ -741,6 +739,7 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 		postCount++
 
 		posts = append(posts, post)
+		lastPost = post
 
 		nextPost()
 	}
