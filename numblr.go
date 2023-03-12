@@ -1209,6 +1209,9 @@ func tumblrToInternal(link string) string {
 	}
 
 	tumblrName := u.Host[:strings.Index(u.Host, ".")]
+	if tumblrName == "www" { // new non-subdmain based urls :(
+		return u.Path
+	}
 	u.Host = ""
 	u.Scheme = ""
 	u.Path = path.Join("/", tumblrName, u.Path)

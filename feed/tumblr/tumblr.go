@@ -129,6 +129,7 @@ func (tr *tumblrRSS) URL() string {
 }
 
 var tumblrPostURLRE = regexp.MustCompile(`https?://([-\w]+).tumblr.com/post/(\d+)(/(.*))?`)
+var tumblrNewPostURLRE = regexp.MustCompile(`https?://www.tumblr.com/([-\w]+)/(\d+)(/(.*))?`)
 var tumblrQuestionRE = regexp.MustCompile(`\s*<p>`)
 
 func (tr *tumblrRSS) Next() (*feed.Post, error) {
@@ -144,6 +145,17 @@ func (tr *tumblrRSS) Next() (*feed.Post, error) {
 		parts := tumblrPostURLRE.FindStringSubmatch(post.ID)
 		if len(parts) >= 3 {
 			post.ID = parts[2]
+		}
+	}
+
+	if tumblrNewPostURLRE.MatchString(post.ID) {
+		parts := tumblrNewPostURLRE.FindStringSubmatch(post.ID)
+		if len(parts) >= 3 {
+			post.ID = parts[2]
+			post.URL = fmt.Sprintf("https://%s.tumblr.com/post/%s", parts[1], parts[2])
+			if len(parts) >= 4 {
+				post.URL += "/" + parts[3]
+			}
 		}
 	}
 
