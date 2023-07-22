@@ -35,6 +35,12 @@ func InitDatabase(dbPath string) (*sql.DB, error) {
 		return nil, fmt.Errorf("open: %w", err)
 	}
 
+	// limit journal size to 1gb
+	_, err = db.ExecContext(context.Background(), fmt.Sprintf("PRAGMA journal_size_limit = %d", 1*1024*1024*1024))
+	if err != nil {
+		return nil, fmt.Errorf("setting journal size: %w", err)
+	}
+
 	go func() {
 		for {
 			time.Sleep(1 * time.Minute)
