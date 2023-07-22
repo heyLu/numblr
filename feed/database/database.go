@@ -57,7 +57,7 @@ func InitDatabase(dbPath string) (*sql.DB, error) {
 		for {
 			time.Sleep(10 * time.Minute)
 
-			_, err := db.ExecContext(context.Background(), "PRAGMA wal_checkpoint(truncate)")
+			_, err := db.ExecContext(context.Background(), "PRAGMA wal_checkpoint(PASSIVE)")
 			if err != nil {
 				log.Printf("Error: wal checkpoint failed: %s", err)
 				continue
