@@ -65,6 +65,8 @@ var config struct {
 	AppDisplayMode string
 
 	CollectStats bool
+
+	MaxConcurrentFeeds int
 }
 
 const CacheTime = 10 * time.Minute
@@ -107,6 +109,7 @@ func main() {
 	flag.StringVar(&config.DefaultFeed, "default", "staff,engineering", "Default feeds to view")
 	flag.StringVar(&config.AppDisplayMode, "app-display", "browser", "Display mode to use when installed as an app")
 	flag.BoolVar(&config.CollectStats, "stats", false, "Whether to collect anonymized stats (num cached feeds & posts, recent errors & user agents")
+	flag.IntVar(&config.MaxConcurrentFeeds, "max-concurrent-feeds", 100, "Maximum feeds to refresh concurrently in the background")
 	flag.StringVar(&nitter.NitterURL, "nitter-url", "https://nitter.net", "Nitter instance to use")
 	flag.StringVar(&bibliogram.BibliogramInstancesURL, "bibliogram-instances-url", bibliogram.BibliogramInstancesURL, "The bibliogram url to use to fetch possible instances from")
 	flag.Parse()
@@ -137,7 +140,7 @@ func main() {
 	}
 
 	go func() {
-		maxConcurrentFeeds := make(chan bool, 100)
+		maxConcurrentFeeds := make(chan bool, config.MaxConcurrentFeeds)
 
 		refreshFn := func() {
 			feeds, err := database.ListFeedsOlderThan(context.Background(), db, time.Now().Add(-CacheTime))
