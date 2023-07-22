@@ -152,13 +152,14 @@ func main() {
 			successfulFeeds := 0
 			for _, feedName := range feeds {
 				err := func(feedName string) error {
+					maxConcurrentFeeds <- true
+
 					ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 					defer cancel()
 
 					AddBackgroundFetch()
 					defer DoneBackgroundFetch()
 
-					maxConcurrentFeeds <- true
 					feed, err := anything.Open(ctx, feedName, cacheFn, feed.Search{ForceFresh: true})
 					if err != nil {
 						<-maxConcurrentFeeds
