@@ -91,7 +91,7 @@ func InitDatabase(dbPath string) (*sql.DB, error) {
 }
 
 // ListFeedsOlderThan lists feeds older than time so that they can be updated.
-func ListFeedsOlderThan(ctx context.Context, db *sql.DB, olderThan time.Time) ([]string, error) {
+func ListFeedsOlderThan(ctx context.Context, db *sql.DB, olderThan time.Time, limit int) ([]string, error) {
 	tx, err := db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
 		return nil, fmt.Errorf("begin tx: %w", err)
@@ -100,7 +100,7 @@ func ListFeedsOlderThan(ctx context.Context, db *sql.DB, olderThan time.Time) ([
 		_ = tx.Rollback()
 	}()
 
-	rows, err := tx.Query(`SELECT name FROM feed_infos WHERE ? > cached_at ORDER BY RANDOM()`, olderThan)
+	rows, err := tx.Query(`SELECT name FROM feed_infos WHERE ? > cached_at ORDER BY RANDOM() LIMIT ?`, olderThan, limit)
 	if err != nil {
 		return nil, fmt.Errorf("select: %w", err)
 	}

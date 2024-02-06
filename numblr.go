@@ -143,7 +143,7 @@ func main() {
 		maxConcurrentFeeds := make(chan bool, config.MaxConcurrentFeeds)
 
 		refreshFn := func() {
-			feeds, err := database.ListFeedsOlderThan(context.Background(), db, time.Now().Add(-CacheTime))
+			feeds, err := database.ListFeedsOlderThan(context.Background(), db, time.Now().Add(-CacheTime), config.MaxConcurrentFeeds*2)
 			if err != nil {
 				log.Printf("Error: listing feeds in background: %s", err)
 				return
