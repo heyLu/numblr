@@ -106,7 +106,7 @@ func ListFeedsOlderThan(ctx context.Context, db *sql.DB, olderThan time.Time, li
 	}
 	defer rows.Close()
 
-	feeds := make([]string, 0, 10)
+	feeds := make([]string, 0, limit)
 	for rows.Next() {
 		var feed string
 		err := rows.Scan(&feed)
