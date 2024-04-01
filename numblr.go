@@ -24,7 +24,7 @@ import (
 	"time"
 
 	"github.com/NYTimes/gziphandler"
-	"github.com/gorilla/mux"
+	"github.com/go-chi/chi/v5"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/yuin/goldmark"
@@ -210,7 +210,7 @@ func main() {
 		log.Fatal("setup avatar cache:", err)
 	}
 
-	router := mux.NewRouter()
+	router := chi.NewRouter()
 	router.Use(gziphandler.GzipHandler)
 	router.Use(strictTransportSecurity)
 
@@ -301,7 +301,7 @@ self.addEventListener('install', function(e) {
 
 	// TODO: implement a follow button (first only for generic feed, either add to cookie or url, depending on context)
 
-	router.HandleFunc("/settings", func(w http.ResponseWriter, req *http.Request) {
+	router.Post("/settings", func(w http.ResponseWriter, req *http.Request) {
 		list := req.FormValue("list")
 		feeds := req.FormValue("feeds")
 
@@ -339,9 +339,9 @@ self.addEventListener('install', function(e) {
 			HttpOnly: true,
 		})
 		http.Redirect(w, req, redirect, http.StatusSeeOther)
-	}).Methods("POST")
+	})
 
-	router.HandleFunc("/settings/clear", func(w http.ResponseWriter, req *http.Request) {
+	router.Post("/settings/clear", func(w http.ResponseWriter, req *http.Request) {
 		cookie, err := req.Cookie(CookieName)
 		if err != nil {
 			http.Redirect(w, req, "/", http.StatusTemporaryRedirect)
@@ -352,7 +352,7 @@ self.addEventListener('install', function(e) {
 		cookie.MaxAge = -1
 		http.SetCookie(w, cookie)
 		http.Redirect(w, req, "/", http.StatusSeeOther)
-	}).Methods("POST")
+	})
 
 	router.HandleFunc("/proxy", func(w http.ResponseWriter, req *http.Request) {
 		proxyURL := req.URL.Query().Get("url")
@@ -456,7 +456,7 @@ func htmlPrelude(w http.ResponseWriter, req *http.Request, title, description, f
 }
 
 func HandleAvatar(w http.ResponseWriter, req *http.Request) {
-	tumblr := mux.Vars(req)["tumblr"]
+	tumblr := chi.URLParam(req, "tumblr")
 
 	avatar, isCached := avatarCache.Get(tumblr)
 	if isCached {
@@ -541,7 +541,7 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	tag := mux.Vars(req)["tag"]
+	tag := chi.URLParam(req, "tag")
 	if tag != "" {
 		req.URL.Path = strings.Replace(req.URL.Path, "/tagged/"+tag, "", 1)
 	}
@@ -615,8 +615,8 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 	title := strings.Join(settings.SelectedFeeds, ",")
 	if req.URL.Path == "" || req.URL.Path == "/" {
 		title = "everything"
-	} else if mux.Vars(req)["list"] != "" {
-		title = mux.Vars(req)["list"]
+	} else if chi.URLParam(req, "list") != "" {
+		title = chi.URLParam(req, "list")
 	}
 
 	favicon := "/favicon.png"
@@ -1022,7 +1022,7 @@ func HandleTumblr(w http.ResponseWriter, req *http.Request) {
 <form method="POST" action="/settings/clear">
 	<input type="submit" value="Clear" title="FIXME: clear currently broken :/" disabled />
 </form>
-`, mux.Vars(req)["list"], len(settings.SelectedFeeds)+1, strings.Join(settings.SelectedFeeds, "\n"))
+`, chi.URLParam(req, "list"), len(settings.SelectedFeeds)+1, strings.Join(settings.SelectedFeeds, "\n"))
 
 	u := url.URL{
 		Path: strings.Join(settings.SelectedFeeds, ","),
@@ -1294,7 +1294,7 @@ func getFeeds(req *http.Request) []string {
 	cookieName := CookieName
 
 	if isList {
-		cookieName = CookieName + "-list-" + mux.Vars(req)["list"]
+		cookieName = CookieName + "-list-" + chi.URLParam(req, "list")
 	}
 
 	cookie, err := req.Cookie(cookieName)
@@ -1338,9 +1338,9 @@ func prettyDuration(dur time.Duration) string {
 }
 
 func HandlePost(w http.ResponseWriter, req *http.Request) {
-	tumblr := mux.Vars(req)["tumblr"]
-	postID := mux.Vars(req)["postId"]
-	slug := mux.Vars(req)["slug"]
+	tumblr := chi.URLParam(req, "tumblr")
+	postID := chi.URLParam(req, "postId")
+	slug := chi.URLParam(req, "slug")
 	if slug != "" {
 		slug = "/" + slug
 	}

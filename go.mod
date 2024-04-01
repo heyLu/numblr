@@ -5,7 +5,7 @@ go 1.21
 require (
 	github.com/NYTimes/gziphandler v1.1.1
 	github.com/andybalholm/cascadia v1.3.2
-	github.com/gorilla/mux v1.8.1
+	github.com/go-chi/chi/v5 v5.0.12
 	github.com/hashicorp/golang-lru v1.0.2
 	github.com/mattn/go-sqlite3 v1.14.22
 	github.com/mmcdole/gofeed v1.2.1
