@@ -1,6 +1,6 @@
 .PHONY: lighthouse.html
 
-numblr: favicon.png *.go Makefile
+numblr: favicon.png *.go go.* Makefile
 	go build .
 	strip numblr
 	upx numblr
